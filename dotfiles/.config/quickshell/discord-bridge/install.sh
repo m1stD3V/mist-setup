@@ -2,6 +2,9 @@
 # Builds Equicord with the DiscordBridge userplugin and injects it into the
 # local Discord install. Re-run this after a Discord update if the widget
 # stops reporting state.
+#
+# WARNING: this builds and injects a third-party client mod into Discord.
+# Client mods can violate Discord's Terms of Service; use at your own risk.
 set -euo pipefail
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/plugin" && pwd)"

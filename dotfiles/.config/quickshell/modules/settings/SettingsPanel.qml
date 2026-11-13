@@ -22,6 +22,10 @@ PanelWindow {
     }
     readonly property bool showHere: ShellState.settingsOpen && onFocused
 
+    // frame is designed for a 1920x1080 logical desktop; shrink proportionally
+    // on smaller screens so the window always fits
+    readonly property real frameScale: Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080))
+
     readonly property var sections: [{
             "id": "bar",
             "label": "BAR"
@@ -92,6 +96,8 @@ PanelWindow {
         anchors.centerIn: parent
         width: 860
         height: 580
+        // transformOrigin defaults to Item.Center, so the scaled frame stays centered
+        scale: root.frameScale
         title: "SETTINGS"
         focus: root.showHere
 

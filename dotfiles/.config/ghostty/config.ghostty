@@ -2,7 +2,7 @@ command = /usr/bin/zsh
 font-family = "MesloLGS NF"
 font-size = 14
 
-# game boy frosted glass, matched to the quickshell bar
+# frosted glass, tint matched to the quickshell bar
 background-opacity = 0.78
 background-blur = true
 background-opacity-cells = true

@@ -160,9 +160,23 @@ Singleton {
         if (p.length > 0)
             Quickshell.execDetached(["wl-copy", p]);
 
+        // pacseek is a TUI: on small logical screens also shrink the terminal
+        // font so the grid stays dense enough to use (MesloLGS NF cells
+        // measured at 11.0x23.5 logical px at the config's 14pt)
+        const fm = Hypr.focusedMonitor?.name ?? "";
+        const screen = Quickshell.screens.find(s => (Hypr.monitorFor(s)?.name ?? "") === fm) ?? null;
+        const fit = screen ? Math.min(1, Math.min(screen.width / 1920, screen.height / 1080)) : 1;
+        const fontPt = Math.max(10, Math.min(14, Math.round(14 * fit)));
+        const cellW = 11.0 * fontPt / 14;
+        const cellH = 23.5 * fontPt / 14;
+        const cols = screen ? Math.max(60, Math.min(160, Math.floor(screen.width * 0.6 / cellW))) : 97;
+        const rows = screen ? Math.max(20, Math.min(44, Math.floor(screen.height * 0.62 / cellH))) : 29;
+
         const theme = pacseekTheme();
         const configHome = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config");
-        const script = "f=\"$1/pacseek/config.ini\"; t=\"theme = $2\"; if [ -f \"$f\" ]; then if ! grep -qxF \"$t\" \"$f\"; then tmp=$(mktemp); awk -v line=\"$t\" 'BEGIN{done=0} /^[[:space:]]*#?[[:space:]]*theme[[:space:]]*=/{if(!done){print line; done=1} else next; next} {print} END{if(!done) print line}' \"$f\" > \"$tmp\" && mv \"$tmp\" \"$f\"; fi; else mkdir -p \"$(dirname \"$f\")\"; printf '%s\\n' \"$t\" > \"$f\"; fi; exec ghostty --title=pacseek --confirm-close-surface=false -e pacseek --ascii";
+        // quickshell's PATH lacks ~/.local/bin (where go/user binaries like
+        // pacseek live), so resolve the binary explicitly and fail loudly
+        const script = "export PATH=\"$HOME/.local/bin:$PATH\"; bin=\"$(command -v pacseek || true)\"; if [ -z \"$bin\" ]; then command -v notify-send >/dev/null 2>&1 && notify-send -u critical \"Launcher\" \"pacseek not found in PATH\"; exit 127; fi; f=\"$1/pacseek/config.ini\"; t=\"theme = $2\"; if [ -f \"$f\" ]; then if ! grep -qxF \"$t\" \"$f\"; then tmp=$(mktemp); awk -v line=\"$t\" 'BEGIN{done=0} /^[[:space:]]*#?[[:space:]]*theme[[:space:]]*=/{if(!done){print line; done=1} else next; next} {print} END{if(!done) print line}' \"$f\" > \"$tmp\" && mv \"$tmp\" \"$f\"; fi; else mkdir -p \"$(dirname \"$f\")\"; printf '%s\\n' \"$t\" > \"$f\"; fi; exec ghostty --font-size=" + fontPt + " --window-width=" + cols + " --window-height=" + rows + " --title=pacseek --confirm-close-surface=false -e \"$bin\" --ascii";
         Quickshell.execDetached(["sh", "-c", script, "sh", configHome, theme]);
     }
 

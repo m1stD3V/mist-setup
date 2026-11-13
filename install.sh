@@ -9,7 +9,6 @@ SYSTEM_DIR="$ROOT_DIR/system"
 
 TARGET_USER="${SUDO_USER:-$USER}"
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-SUDO="sudo"
 
 ASSUME_YES=0
 DRY_RUN=0
@@ -247,8 +246,17 @@ install_omz() {
     log "[dry-run] install Oh My Zsh"
     return 0
   fi
-  HOME="$TARGET_HOME" RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  local omz_installer
+  omz_installer="$(mktemp)"
+  # Download first so the remote script is visible on disk and the transfer is
+  # forced over HTTPS. It is still third-party code; review it if you care.
+  if ! curl --proto '=https' --tlsv1.2 -fsSL -o "$omz_installer" \
+    https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh; then
+    rm -f "$omz_installer"
+    die "Failed to download the Oh My Zsh installer"
+  fi
+  HOME="$TARGET_HOME" RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh "$omz_installer"
+  rm -f "$omz_installer"
 }
 
 install_p10k() {
@@ -273,10 +281,21 @@ install_fonts() {
   mkdir -p "$font_dir"
   local i
   for i in "${!url_names[@]}"; do
-    curl -fL --retry 3 -o "$font_dir/MesloLGS NF ${file_names[$i]}.ttf" \
+    curl --proto '=https' --tlsv1.2 -fL --retry 3 -o "$font_dir/MesloLGS NF ${file_names[$i]}.ttf" \
       "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20${url_names[$i]}.ttf"
   done
-  fc-cache -f >/dev/null
+}
+
+refresh_font_cache() {
+  command -v fc-cache >/dev/null || return 0
+  log "Refreshing font cache"
+  if ((DRY_RUN)); then
+    log "[dry-run] fc-cache -f"
+    return 0
+  fi
+  # Target the deployed user's cache even if the script ran with a different
+  # HOME; includes both MesloLGS NF and the bundled icons-in-terminal font.
+  HOME="$TARGET_HOME" fc-cache -f >/dev/null
 }
 
 deploy_dotfiles() {
@@ -368,7 +387,16 @@ install_opencode() {
     log "[dry-run] install OpenCode into $TARGET_HOME/.opencode"
     return 0
   fi
-  HOME="$TARGET_HOME" bash -c 'curl -fsSL https://opencode.ai/install | bash' || warn "OpenCode install failed"
+  local oc_installer
+  oc_installer="$(mktemp)"
+  # Download first so the remote script is visible on disk and the transfer is
+  # forced over HTTPS. It is still third-party code.
+  if curl --proto '=https' --tlsv1.2 -fsSL -o "$oc_installer" https://opencode.ai/install; then
+    HOME="$TARGET_HOME" bash "$oc_installer" || warn "OpenCode install failed"
+  else
+    warn "OpenCode download failed"
+  fi
+  rm -f "$oc_installer"
 }
 
 bootstrap_nvim() {
@@ -451,6 +479,7 @@ main() {
   install_p10k
   install_fonts
   deploy_dotfiles
+  refresh_font_cache
   install_system_configs
   enable_services
   set_shell

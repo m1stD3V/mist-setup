@@ -126,6 +126,31 @@ alias lg='lazygit'
 alias hyprconf='cd ~/.config/hypr'
 alias nvconf='cd ~/.config/nvim'
 alias qsconf='cd ~/.config/quickshell'
-alias school='cd ~/Projects/School'
-alias personal='cd ~/Projects/Personal'
+# Project shortcuts; only active when the directories exist
+if [[ -d ~/Projects/School ]]; then alias school='cd ~/Projects/School'; fi
+if [[ -d ~/Projects/Personal ]]; then alias personal='cd ~/Projects/Personal'; fi
 alias home='cd ~'
+
+# eza: ls with file-type icons (provided by packages/dev.txt)
+# Icons are shown only when output is a terminal, so pipes stay plain.
+# The block is conditional, so a machine without eza keeps plain oh-my-zsh ls.
+# The unalias has to run in its own command: zsh parses (and expands aliases
+# for) the whole following block before executing it.
+if command -v eza >/dev/null 2>&1; then
+  unalias ls l ll la lt lta tree 2>/dev/null
+fi
+
+if command -v eza >/dev/null 2>&1; then
+  _eza() {
+    local -a icon_args
+    if [[ -t 1 ]]; then icon_args=(--icons=always); else icon_args=(--icons=never); fi
+    eza --group-directories-first "${icon_args[@]}" "$@"
+  }
+  ls() { _eza "$@"; }
+  l()  { _eza -l --header --git --time-style=long-iso "$@"; }
+  ll() { _eza -la --header --git --time-style=long-iso "$@"; }
+  la() { _eza -a "$@"; }
+  lt() { _eza --tree --level=2 "$@"; }
+  lta() { _eza --tree --level=3 -a "$@"; }
+  tree() { _eza --tree "$@"; }
+fi

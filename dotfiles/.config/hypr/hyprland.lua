@@ -19,11 +19,15 @@
 ------------------
 
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
+-- Intentionally hardware-agnostic: no output name, mode or scale is pinned,
+-- so the same config works on a laptop panel (eDP), a desktop GPU (DP/HDMI)
+-- and any monitor you plug in. Each output keeps its preferred mode,
+-- Hyprland's per-monitor scaling, and automatic arrangement.
 hl.monitor({
-	output = "HDMI-A-1",
-	mode = "3840x2160@60",
+	output = "",
+	mode = "preferred",
 	position = "auto",
-	scale = "1.5",
+	scale = "auto",
 })
 
 ------------------
@@ -55,7 +59,7 @@ local sysmon = "qs ipc call mist toggleSysmon"
 -- Autostart necessary processes (like notifications daemons, status bars, etc.)
 -- Or execute your favorite apps at launch like this:
 --
--- mist-86 quickshell replaces waybar + swaync
+-- quickshell replaces waybar + swaync
 hl.on("hyprland.start", function()
 	hl.exec_cmd("quickshell &")
 end)
@@ -368,17 +372,18 @@ hl.window_rule({
 	name = "btop-float",
 	match = { title = "^(btop|htop)$" },
 
+	-- no hardcoded size: opens at the app's own request, resizable
 	float = true,
 	center = true,
 	pin = true,
-	size = "1200 800",
 })
 
 hl.window_rule({
 	name = "pacseek-float",
 	match = { title = "^pacseek$" },
 
+	-- no hardcoded size: the launcher passes screen-adaptive
+	-- --window-width/--window-height (cells) to ghostty
 	float = true,
 	center = true,
-	size = "1200 800",
 })

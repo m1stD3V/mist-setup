@@ -22,11 +22,11 @@ Singleton {
     property color inverseText: "#0d0d0d"
     property color accent: "#e6e6e6"
     property color accentDim: "#565656"
-    // translucent Game Boy tint for the bar, recomputed from the wallpaper;
+    // translucent tint for the bar, recomputed from the wallpaper;
     // barOpacity is adjustable from Settings
     property real barOpacity: 0.78
-    property real barTintHue: 95
-    property real barTintSat: 0.30
+    property real barTintHue: 0
+    property real barTintSat: 0
     readonly property color barBg: hsla(barTintHue, barTintSat, 0.10, barOpacity)
     readonly property color barBorder: hsla(barTintHue, Math.min(0.55, barTintSat + 0.12), 0.34, 0.65)
 
@@ -76,7 +76,7 @@ Singleton {
         accent = hsl(ah, as, 0.62);
         accentDim = hsl(ah, as * 0.8, 0.40);
 
-        barTintHue = blendHue(nh, 95, 0.7);
+        barTintHue = nh;
         barTintSat = Math.max(0.18, Math.min(0.42, ns * 0.8 + 0.14));
     }
 
@@ -95,13 +95,8 @@ Singleton {
         inverseText = "#0d0d0d";
         accent = "#e6e6e6";
         accentDim = "#565656";
-        barTintHue = 95;
-        barTintSat = 0.30;
-    }
-
-    function blendHue(h: real, target: real, amount: real): real {
-        const diff = ((target - h + 540) % 360) - 180;
-        return (h + diff * amount + 360) % 360;
+        barTintHue = 0;
+        barTintSat = 0;
     }
 
     function hsla(h: real, s: real, l: real, a: real): color {

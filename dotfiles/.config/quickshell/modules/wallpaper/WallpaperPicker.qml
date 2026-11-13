@@ -17,6 +17,10 @@ PanelWindow {
 
     readonly property bool showHere: ShellState.wallpaperOpen && Hypr.focusedMonitor?.name === Hypr.monitorFor(modelData)?.name
 
+    // frame is designed for a 1920x1080 logical desktop; shrink proportionally
+    // on smaller screens so the window always fits
+    readonly property real frameScale: Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080))
+
     screen: modelData
     visible: showHere
     anchors {
@@ -46,6 +50,8 @@ PanelWindow {
         anchors.centerIn: parent
         width: 780
         height: 560
+        // transformOrigin defaults to Item.Center, so the scaled frame stays centered
+        scale: root.frameScale
         title: "WALLPAPERS"
         focus: root.showHere
 

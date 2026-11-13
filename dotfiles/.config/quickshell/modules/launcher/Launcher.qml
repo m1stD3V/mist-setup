@@ -22,6 +22,12 @@ PanelWindow {
     property string hoveredFile: ""
     readonly property int previewWidth: 280
 
+    // uniform shrink factor for the frame: designed for a 1920x1080 logical
+    // desktop, scaled down proportionally on smaller screens so the window
+    // always fits (logical pixels already account for output scale); floored
+    // at 0.8 so small screens keep it usable rather than tiny
+    readonly property real frameScale: Math.max(0.8, Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080)))
+
     screen: modelData
     visible: showHere
     anchors {
@@ -50,6 +56,8 @@ PanelWindow {
         anchors.centerIn: parent
         width: 660
         height: 440
+        // transformOrigin defaults to Item.Center, so the scaled frame stays centered
+        scale: root.frameScale
         title: Launcher.packageMode ? "PACKAGE INSTALLER" : (Launcher.fileMode ? "FILE SEARCH" : "PROGRAM EXECUTOR")
 
         // prompt row

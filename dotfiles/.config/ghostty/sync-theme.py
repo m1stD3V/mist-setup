@@ -33,9 +33,11 @@ def analyze(path):
         [
             "sh",
             "-c",
-            "ffmpeg -hide_banner -loglevel error -i '"
-            + path
-            + "' -vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - | od -An -tu1 -v",
+            'ffmpeg -hide_banner -loglevel error -i "$1" '
+            "-vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - "
+            "| od -An -tu1 -v",
+            "sh",
+            path,
         ]
     )
     b = [int(x) for x in raw.split()]
@@ -149,9 +151,9 @@ def ansi_palette(c, nh, ns, ah, a_s):
 
 def render(c, nh, ns, ah, a_s):
     ansi = ansi_palette(c, nh, ns, ah, a_s)
-    # Match the quickshell bar: blend the wallpaper hue toward DMG green and
-    # use the same dark tint as Theme.barBg. Ghostty supplies the opacity/blur.
-    gb_h = mix_hue(nh, 95, 0.70)
+    # Match the quickshell bar: same tint as Theme.barBg (wallpaper hue, dark
+    # tint, barTintSat ladder). Ghostty supplies the opacity/blur.
+    gb_h = nh
     gb_s = max(0.18, min(0.42, ns * 0.8 + 0.14))
     gb_bg = hsl(gb_h, gb_s, 0.10)
     lines = [

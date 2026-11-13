@@ -163,7 +163,8 @@ Singleton {
             Theme.reset();
             return;
         }
-        samplerProc.command = ["sh", "-c", "ffmpeg -hide_banner -loglevel error -i '" + path + "' -vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - | od -An -tu1 -v"];
+        // Pass the path as $1 instead of splicing it into the shell command.
+        samplerProc.command = ["sh", "-c", "ffmpeg -hide_banner -loglevel error -i \"$1\" -vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - | od -An -tu1 -v", "sh", path];
         samplerProc.running = true;
     }
 

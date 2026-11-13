@@ -75,24 +75,12 @@ PanelWindow {
 
             spacing: 6
 
-            Row {
-                spacing: 6
+            Widgets.BarModule {
+                visible: Settings.showTray && tray.visible
 
-                Widgets.BarModule {
-                    visible: Settings.showTray && tray.visible
-
-                    Widgets.Tray {
-                        id: tray
-                        window: root
-                    }
-                }
-
-                Widgets.BarModule {
-                    visible: Settings.showBattery && battery.visible
-
-                    Widgets.BatteryW {
-                        id: battery
-                    }
+                Widgets.Tray {
+                    id: tray
+                    window: root
                 }
             }
 
@@ -114,6 +102,14 @@ PanelWindow {
                     id: vol
                     window: root
                     visible: Settings.showVolume
+                }
+            }
+
+            Widgets.BarModule {
+                visible: Settings.showBattery && battery.visible
+
+                Widgets.BatteryW {
+                    id: battery
                 }
             }
 
