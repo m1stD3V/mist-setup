@@ -31,7 +31,7 @@ installer:
 ```sh
 sudo pacman -S --needed git sudo
 sudo usermod -aG wheel "$USER"
-git clone <this-repo> ~/mist-setup
+git clone https://github.com/m1stD3V/mist-setup.git ~/mist-setup
 cd ~/mist-setup
 ./install.sh --dry-run
 ./install.sh
@@ -42,7 +42,7 @@ Make sure your user can use sudo before running the installer.
 ## Usage
 
 ```sh
-git clone <this-repo> ~/mist-setup
+git clone https://github.com/m1stD3V/mist-setup.git ~/mist-setup
 cd ~/mist-setup
 chmod +x install.sh
 ./install.sh
