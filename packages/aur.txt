@@ -1,0 +1,5 @@
+zen-browser-bin
+vesktop-bin
+zoom
+openlogi-bin
+openchamber-desktop-appimage

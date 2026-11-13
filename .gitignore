@@ -1,0 +1,10 @@
+*.swp
+*.swo
+*~
+.DS_Store
+__pycache__/
+*.py[cod]
+*.log
+*.iso
+out/
+work/

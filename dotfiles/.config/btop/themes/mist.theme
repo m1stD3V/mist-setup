@@ -1,0 +1,52 @@
+# mist.theme - palette sampled from the current quickshell wallpaper
+# monochrome phosphor base, wallpaper-tinted neutral cast + violet accent
+# bg #0b0911  surface #161221  surfaceHigh #221d35  surfaceHighest #2f2749
+# border #3d345b  borderHigh #6551a4  text #d2cedf  textDim #826ec4
+# textMuted #564d75  accent #734cf0  accentDim #4221ab
+
+theme[main_bg]="#0b0911"
+theme[main_fg]="#d2cedf"
+theme[title]="#f7f6f8"
+theme[hi_fg]="#734cf0"
+theme[selected_bg]="#2f2749"
+theme[selected_fg]="#f7f6f8"
+theme[inactive_fg]="#564d75"
+theme[proc_misc]="#826ec4"
+
+theme[cpu_box]="#3d345b"
+theme[mem_box]="#3d345b"
+theme[net_box]="#3d345b"
+theme[proc_box]="#3d345b"
+theme[div_line]="#2f2749"
+
+theme[temp_start]="#3d345b"
+theme[temp_mid]="#6551a4"
+theme[temp_end]="#734cf0"
+
+theme[cpu_start]="#3d345b"
+theme[cpu_mid]="#6551a4"
+theme[cpu_end]="#734cf0"
+
+theme[free_start]="#2f2749"
+theme[free_mid]="#3d345b"
+theme[free_end]="#6551a4"
+
+theme[cached_start]="#3d345b"
+theme[cached_mid]="#6551a4"
+theme[cached_end]="#734cf0"
+
+theme[available_start]="#2f2749"
+theme[available_mid]="#3d345b"
+theme[available_end]="#6551a4"
+
+theme[used_start]="#3d345b"
+theme[used_mid]="#6551a4"
+theme[used_end]="#734cf0"
+
+theme[download_start]="#3d345b"
+theme[download_mid]="#6551a4"
+theme[download_end]="#734cf0"
+
+theme[upload_start]="#3d345b"
+theme[upload_mid]="#6551a4"
+theme[upload_end]="#734cf0"

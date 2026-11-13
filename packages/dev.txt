@@ -1,0 +1,16 @@
+neovim
+git
+lazygit
+nodejs
+npm
+python
+python-pip
+rustup
+ripgrep
+fd
+fzf
+jq
+gcc
+make
+pkgconf
+shellcheck
