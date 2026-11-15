@@ -11,6 +11,8 @@ Arch Linux installation with a bootloader and can log in.
 - PipeWire, WirePlumber, NetworkManager, Bluetooth
 - power-profiles-daemon for the bar's battery and power profile popup
 - zsh, Oh My Zsh, Powerlevel10k, MesloLGS NF fonts
+- yay (AUR helper) and pacseek, the package browser the launcher opens
+  (pacseek is built from source into `~/.local/bin`)
 - eza with Nerd Font file icons (`ls`, `l`, `ll`, `la`, `lt`, `tree`)
 - The icons-in-terminal glyph font plus its fontconfig fallback rule
 - Neovim with Lazy.nvim plugins, LSP servers, formatters, and Treesitter
@@ -62,6 +64,46 @@ Common options:
 ./install.sh --no-dotfiles      # packages only
 ```
 
+## Updating an existing install
+
+`--update` brings a machine that already runs Mist up to the current revision:
+
+```sh
+./install.sh --check            # report remote commits, package and dotfile drift
+./install.sh --update           # fetch, pull, install missing packages, deploy changes
+./install.sh --update --diff    # also show unified diffs for changed dotfiles
+./install.sh --update --force   # replace locally modified files (backed up first)
+```
+
+It works in three steps:
+
+1. **Remote** — fetches `origin`, lists the new commits and changed files, and
+   fast-forwards the checkout. A dirty tree or a diverged branch is left alone
+   with a warning. If `install.sh` itself changed, the update restarts with the
+   new script.
+2. **Packages** — compares `packages/*.txt` with `pacman -T` and offers to
+   install anything added upstream. Pass `--no-packages` to leave packages
+   alone, or `--full` / `--apps` / `--aur` to include the optional groups.
+3. **Dotfiles** — compares each bundled file with the deployed copy and the
+   hash recorded in `~/.local/state/mist/deployed.tsv`:
+   - new files are added
+   - upstream changes are applied, with the old file saved as
+     `*.pre-mist-<timestamp>`
+   - files removed upstream are moved to a `.pre-mist-<timestamp>` backup
+   - local edits are kept; if upstream also changed the file, the repo version
+     is written next to it as `*.mist-new` for review
+   - locally modified files removed upstream are kept
+
+   `--force` replaces locally modified files instead (still backing them up),
+   and `--check` (or `--dry-run`) only reports what would happen. Files
+   generated from the wallpaper, such as `~/.config/ghostty/theme`, belong to
+   the theme scripts: they are seeded when missing and never overwritten by an
+   update.
+
+`--no-pull` skips the remote step and updates from the current checkout, which
+is useful when the repository is the source of truth for local changes. After a
+dotfile update, reload the desktop (`hyprctl reload`, or log out and back in).
+
 ## Repository layout
 
 ```text
@@ -105,7 +147,9 @@ fonts are third-party assets; their authors and licenses are listed in
 [`CREDITS.md`](CREDITS.md).
 
 Existing files are backed up with a `.pre-mist-<timestamp>` suffix before being
-replaced.
+replaced. The hash of every deployed file is recorded in
+`~/.local/state/mist/deployed.tsv`, which is what lets `--update` tell an
+upstream change apart from a local edit.
 
 ## Portability
 
@@ -172,6 +216,8 @@ The deployed config avoids machine-specific values:
   `packages/apps.txt` and AUR packages from `packages/aur.txt`, then enables
   the cups printing stack and firewalld.
 - OpenCode is installed only with `--full` or `--opencode`.
+- yay and pacseek are installed on every run; `--aur` only controls the optional
+  AUR applications listed in `packages/aur.txt`.
 
 ### Discord bridge (optional, client mod)
 

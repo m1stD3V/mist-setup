@@ -20,6 +20,38 @@ INSTALL_OPENCODE=0
 INSTALL_NVIDIA=0
 INSTALL_DISCORD_BRIDGE=0
 
+UPDATE_MODE=0
+CHECK_ONLY=0
+NO_PULL=0
+NO_PACKAGES=0
+FORCE_DOTFILES=0
+SHOW_DIFF=0
+ORIGINAL_ARGS=()
+
+MIST_STATE_DIR="$TARGET_HOME/.local/state/mist"
+DEPLOY_MANIFEST="$MIST_STATE_DIR/deployed.tsv"
+
+# Files generated at runtime from the wallpaper (see setup_theme). They are
+# shipped as a starting point but are never treated as drift or overwritten as
+# dotfiles; the theme scripts rewrite them after an update.
+GENERATED_DOTFILES=(".config/ghostty/theme")
+
+DOTFILES_CHANGED=0
+SYSTEM_CONFIGS_CHANGED=0
+GENERATED_MISSING=0
+COLLECTED=()
+PLAN_ADD=()
+PLAN_UPDATE=()
+PLAN_ADOPT=()
+PLAN_CONFLICT=()
+PLAN_LOCAL=()
+PLAN_REMOVE=()
+PLAN_KEEP_REMOVED=()
+PLAN_GENERATED=()
+MISSING_REPO=()
+MISSING_AUR=()
+declare -A MANIFEST=()
+
 C_RESET=$'\033[0m'
 C_BLUE=$'\033[34m'
 C_GREEN=$'\033[32m'
@@ -40,10 +72,20 @@ Mist setup installer for a fresh Arch Linux install.
 
 Usage:
   ./install.sh [options]
+  ./install.sh --update [options]
 
 Options:
   -y, --yes          Accept defaults without prompting
       --dry-run      Print actions without changing the system
+      --update       Update an existing install: pull the new repo revision,
+                     install missing packages, then update changed dotfiles
+                     (locally modified files are kept and saved as .mist-new)
+      --check        Report remote commits, package drift and dotfile drift
+                     without changing anything (implies --update --dry-run)
+      --no-pull      Do not fetch or pull from the git remote
+      --no-packages  Do not install packages missing from the package lists
+      --force        Replace locally modified dotfiles (they are backed up)
+      --diff         Show unified diffs for the dotfiles an update changes
       --full         Install optional apps, AUR packages, and OpenCode
       --apps         Install the optional applications group
       --aur          Install AUR packages (implies --apps)
@@ -68,6 +110,16 @@ parse_args() {
     case "$1" in
       -y|--yes) ASSUME_YES=1 ;;
       --dry-run) DRY_RUN=1 ;;
+      --update) UPDATE_MODE=1 ;;
+      --check)
+        UPDATE_MODE=1
+        CHECK_ONLY=1
+        DRY_RUN=1
+        ;;
+      --no-pull) NO_PULL=1 ;;
+      --no-packages) NO_PACKAGES=1 ;;
+      --force) FORCE_DOTFILES=1 ;;
+      --diff) SHOW_DIFF=1 ;;
       --full)
         INSTALL_APPS=1
         INSTALL_AUR=1
@@ -210,7 +262,10 @@ install_microcode() {
 }
 
 install_yay() {
-  command -v yay >/dev/null && return 0
+  if command -v yay >/dev/null; then
+    ok "yay already installed"
+    return 0
+  fi
   log "Installing yay-bin from the AUR"
   local tmp
   tmp="$(mktemp -d)"
@@ -224,6 +279,31 @@ install_yay() {
     makepkg -si --noconfirm
   )
   rm -rf "$tmp"
+}
+
+install_pacseek() {
+  if [[ -x "$TARGET_HOME/.local/bin/pacseek" || -x /usr/local/bin/pacseek ]]; then
+    ok "pacseek already installed"
+    return 0
+  fi
+  log "Installing pacseek into $TARGET_HOME/.local/bin"
+  if ((DRY_RUN)); then
+    log "[dry-run] download and run the pacseek installer"
+    return 0
+  fi
+  local pacseek_installer
+  pacseek_installer="$(mktemp)"
+  # Download first so the remote script is visible on disk and the transfer is
+  # forced over HTTPS. It is still third-party code.
+  if ! curl --proto '=https' --tlsv1.2 -fsSL -o "$pacseek_installer" \
+    https://codeberg.org/m1stD3V/pacseek/raw/branch/main/get.sh; then
+    rm -f "$pacseek_installer"
+    warn "Failed to download the pacseek installer; skipping"
+    return 0
+  fi
+  # User install: the launcher and ~/.zshrc both add ~/.local/bin to PATH.
+  HOME="$TARGET_HOME" sh "$pacseek_installer" || warn "pacseek install failed"
+  rm -f "$pacseek_installer"
 }
 
 install_aur_packages() {
@@ -303,33 +383,292 @@ refresh_font_cache() {
   HOME="$TARGET_HOME" fc-cache -f >/dev/null
 }
 
+hash_file() {
+  sha256sum "$1" | cut -d' ' -f1
+}
+
+# The manifest records the hash of every file as it was deployed, so an update
+# can tell an upstream change apart from a local edit made after the last run.
+load_manifest() {
+  MANIFEST=()
+  if [[ ! -f "$DEPLOY_MANIFEST" ]]; then
+    return 0
+  fi
+  local hash rel
+  while IFS=$'\t' read -r hash rel; do
+    [[ -n "$rel" && -n "$hash" ]] && MANIFEST["$rel"]="$hash"
+  done <"$DEPLOY_MANIFEST"
+}
+
+save_manifest() {
+  ((DRY_RUN)) && return 0
+  mkdir -p "$MIST_STATE_DIR"
+  local rel
+  {
+    for rel in "${!MANIFEST[@]}"; do
+      printf '%s\t%s\n' "${MANIFEST[$rel]}" "$rel"
+    done | sort -k2
+  } >"$DEPLOY_MANIFEST.tmp"
+  mv "$DEPLOY_MANIFEST.tmp" "$DEPLOY_MANIFEST"
+}
+
+# True when the deployed file matches a revision this repo shipped before, which
+# means it is a stale deploy rather than a local edit. Used to bootstrap the
+# manifest on machines installed before it existed.
+deployed_matches_history() {
+  local rel="$1" dep_hash="$2" commit blob_hash
+  [[ -d "$ROOT_DIR/.git" ]] || return 1
+  while IFS= read -r commit; do
+    [[ -n "$commit" ]] || continue
+    blob_hash="$(git -C "$ROOT_DIR" cat-file -p "$commit:dotfiles/$rel" 2>/dev/null |
+      sha256sum | cut -d' ' -f1)"
+    [[ "$blob_hash" == "$dep_hash" ]] && return 0
+  done < <(git -C "$ROOT_DIR" log --all --pretty=format:%H -- "dotfiles/$rel" 2>/dev/null)
+  return 1
+}
+
+is_generated_dotfile() {
+  local rel="$1" generated
+  for generated in "${GENERATED_DOTFILES[@]}"; do
+    [[ "$rel" == "$generated" ]] && return 0
+  done
+  return 1
+}
+
+collect_dotfiles() {
+  local src rel
+  COLLECTED=()
+  while IFS= read -r -d '' src; do
+    rel="${src#"$DOTFILES_DIR"/}"
+    case "$rel" in
+      */__pycache__/*|*.pyc|*.pyo|*.swp|*.swo|*~|.DS_Store) continue ;;
+    esac
+    COLLECTED+=("$rel")
+  done < <(find "$DOTFILES_DIR" -type f -print0 | sort -z)
+}
+
+# Fill the PLAN_* arrays by comparing three states per file: the repo copy, the
+# deployed copy and the hash recorded at the last deploy.
+plan_dotfiles() {
+  PLAN_ADD=()
+  PLAN_UPDATE=()
+  PLAN_ADOPT=()
+  PLAN_CONFLICT=()
+  PLAN_LOCAL=()
+  PLAN_REMOVE=()
+  PLAN_KEEP_REMOVED=()
+  PLAN_GENERATED=()
+  GENERATED_MISSING=0
+
+  load_manifest
+  local -A seen=()
+  local rel dest repo_hash dep_hash base_hash
+  for rel in "${COLLECTED[@]}"; do
+    seen["$rel"]=1
+    dest="$TARGET_HOME/$rel"
+    if is_generated_dotfile "$rel"; then
+      PLAN_GENERATED+=("$rel")
+      [[ -e "$dest" ]] || GENERATED_MISSING=1
+      continue
+    fi
+    repo_hash="$(hash_file "$DOTFILES_DIR/$rel")"
+    if [[ ! -e "$dest" ]]; then
+      PLAN_ADD+=("$rel")
+      continue
+    fi
+    dep_hash="$(hash_file "$dest")"
+    if [[ "$dep_hash" == "$repo_hash" ]]; then
+      PLAN_ADOPT+=("$rel")
+      MANIFEST["$rel"]="$repo_hash"
+      continue
+    fi
+    base_hash="${MANIFEST[$rel]:-}"
+    if [[ -z "$base_hash" ]]; then
+      # No manifest entry: this is either a stale deploy from an older revision
+      # or a local edit. History tells them apart; anything unknown is kept.
+      if deployed_matches_history "$rel" "$dep_hash"; then
+        PLAN_UPDATE+=("$rel")
+      else
+        PLAN_CONFLICT+=("$rel")
+      fi
+    elif [[ "$dep_hash" == "$base_hash" ]]; then
+      PLAN_UPDATE+=("$rel")
+    elif [[ "$repo_hash" == "$base_hash" ]]; then
+      PLAN_LOCAL+=("$rel")
+    else
+      PLAN_CONFLICT+=("$rel")
+    fi
+  done
+
+  for rel in "${!MANIFEST[@]}"; do
+    [[ -n "${seen[$rel]:-}" ]] && continue
+    dest="$TARGET_HOME/$rel"
+    [[ -e "$dest" ]] || continue
+    if [[ "$(hash_file "$dest")" == "${MANIFEST[$rel]}" ]]; then
+      PLAN_REMOVE+=("$rel")
+    else
+      PLAN_KEEP_REMOVED+=("$rel")
+    fi
+  done
+}
+
+show_diff() {
+  local rel="$1"
+  local src="$DOTFILES_DIR/$rel" dest="$TARGET_HOME/$rel"
+  ((SHOW_DIFF)) || return 0
+  [[ -f "$dest" ]] || return 0
+  if ! command -v diff >/dev/null; then
+    warn "diff is not installed; cannot show changes for ~/$rel"
+    return 0
+  fi
+  diff -u --label "deployed/$rel" --label "repo/$rel" "$dest" "$src" || true
+}
+
+report_dotfile_plan() {
+  local rel total
+  total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_CONFLICT[@]} +
+    ${#PLAN_LOCAL[@]} + ${#PLAN_REMOVE[@]} + ${#PLAN_KEEP_REMOVED[@]}))
+  if ((total == 0)); then
+    ok "Dotfiles already up to date"
+    return 0
+  fi
+
+  log "Dotfile changes for $TARGET_HOME"
+  for rel in "${PLAN_ADD[@]}"; do
+    printf '  %sadd%s      ~/%s\n' "$C_GREEN" "$C_RESET" "$rel"
+  done
+  for rel in "${PLAN_UPDATE[@]}"; do
+    printf '  %supdate%s   ~/%s\n' "$C_BLUE" "$C_RESET" "$rel"
+    show_diff "$rel"
+  done
+  for rel in "${PLAN_REMOVE[@]}"; do
+    printf '  %sremove%s   ~/%s\n' "$C_YELLOW" "$C_RESET" "$rel"
+  done
+  for rel in "${PLAN_CONFLICT[@]}"; do
+    if ((FORCE_DOTFILES)); then
+      printf '  %sreplace%s  ~/%s (locally modified)\n' "$C_YELLOW" "$C_RESET" "$rel"
+    else
+      printf '  %sconflict%s ~/%s (kept; repo copy saved as ~/%s.mist-new)\n' \
+        "$C_YELLOW" "$C_RESET" "$rel" "$rel"
+    fi
+    show_diff "$rel"
+  done
+  for rel in "${PLAN_LOCAL[@]}"; do
+    printf '  %slocal%s    ~/%s (kept; unchanged upstream)\n' \
+      "$C_GREEN" "$C_RESET" "$rel"
+  done
+  for rel in "${PLAN_KEEP_REMOVED[@]}"; do
+    printf '  %slocal%s    ~/%s (kept; removed upstream but modified here)\n' \
+      "$C_GREEN" "$C_RESET" "$rel"
+  done
+  for rel in "${PLAN_GENERATED[@]}"; do
+    [[ -e "$TARGET_HOME/$rel" ]] && continue
+    printf '  %sseed%s     ~/%s (generated from the wallpaper)\n' \
+      "$C_BLUE" "$C_RESET" "$rel"
+  done
+}
+
+backup_file() {
+  local dest="$1" stamp="$2" backup="$1.pre-mist-$2" n=1
+  while [[ -e "$backup" ]]; do
+    backup="$dest.pre-mist-$stamp.$n"
+    n=$((n + 1))
+  done
+  cp -a "$dest" "$backup"
+  printf '%s\n' "$backup"
+}
+
+apply_dotfile_plan() {
+  local stamp rel src dest backup
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local added=0 updated=0 replaced=0 removed=0 kept=0
+
+  for rel in "${PLAN_ADD[@]}"; do
+    src="$DOTFILES_DIR/$rel"
+    dest="$TARGET_HOME/$rel"
+    mkdir -p "$(dirname "$dest")"
+    cp -a "$src" "$dest"
+    rm -f "$dest.mist-new"
+    MANIFEST["$rel"]="$(hash_file "$src")"
+    added=$((added + 1))
+  done
+
+  for rel in "${PLAN_UPDATE[@]}"; do
+    src="$DOTFILES_DIR/$rel"
+    dest="$TARGET_HOME/$rel"
+    backup="$(backup_file "$dest" "$stamp")"
+    cp -a "$src" "$dest"
+    rm -f "$dest.mist-new"
+    MANIFEST["$rel"]="$(hash_file "$src")"
+    updated=$((updated + 1))
+    printf '  backup %s\n' "$backup"
+  done
+
+  for rel in "${PLAN_CONFLICT[@]}"; do
+    src="$DOTFILES_DIR/$rel"
+    dest="$TARGET_HOME/$rel"
+    if ((FORCE_DOTFILES)); then
+      backup="$(backup_file "$dest" "$stamp")"
+      cp -a "$src" "$dest"
+      rm -f "$dest.mist-new"
+      MANIFEST["$rel"]="$(hash_file "$src")"
+      replaced=$((replaced + 1))
+      printf '  backup %s\n' "$backup"
+    else
+      cp -a "$src" "$dest.mist-new"
+      kept=$((kept + 1))
+    fi
+  done
+
+  for rel in "${PLAN_REMOVE[@]}"; do
+    dest="$TARGET_HOME/$rel"
+    backup="$(backup_file "$dest" "$stamp")"
+    rm -f "$dest"
+    unset 'MANIFEST[$rel]'
+    removed=$((removed + 1))
+    printf '  backup %s\n' "$backup"
+  done
+
+  # Seed a missing generated file so the app that reads it works even before
+  # the theme scripts run. It is not recorded in the manifest.
+  for rel in "${PLAN_GENERATED[@]}"; do
+    dest="$TARGET_HOME/$rel"
+    [[ -e "$dest" ]] && continue
+    mkdir -p "$(dirname "$dest")"
+    cp -a "$DOTFILES_DIR/$rel" "$dest"
+    printf '  seed     ~/%s\n' "$rel"
+  done
+
+  ok "Dotfiles: $added added, $updated updated, $replaced forced, $removed removed"
+  if ((kept > 0 && !FORCE_DOTFILES)); then
+    warn "$kept locally modified file(s) kept; review the .mist-new copies or rerun with --force"
+  fi
+}
+
 deploy_dotfiles() {
   ((NO_DOTFILES)) && {
     warn "Skipping dotfiles"
     return 0
   }
-  log "Deploying dotfiles to $TARGET_HOME"
+  collect_dotfiles
+  plan_dotfiles
+  local total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_CONFLICT[@]} +
+    ${#PLAN_REMOVE[@]} + GENERATED_MISSING))
+  if ((total > 0)); then
+    DOTFILES_CHANGED=1
+  fi
   if ((DRY_RUN)); then
-    log "[dry-run] copy $DOTFILES_DIR into $TARGET_HOME"
+    log "Checking dotfiles in $TARGET_HOME (dry run)"
+    report_dotfile_plan
     return 0
   fi
-
-  local stamp
-  stamp="$(date +%Y%m%d-%H%M%S)"
-  local src rel dest
-  while IFS= read -r -d '' src; do
-    rel="${src#"$DOTFILES_DIR"/}"
-    dest="$TARGET_HOME/$rel"
-    if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
-      continue
-    fi
-    mkdir -p "$(dirname "$dest")"
-    if [[ -e "$dest" ]]; then
-      cp -a "$dest" "$dest.pre-mist-$stamp"
-    fi
-    cp -a "$src" "$dest"
-  done < <(find "$DOTFILES_DIR" -type f -print0)
-  ok "Dotfiles deployed"
+  report_dotfile_plan
+  if ((total > 0)); then
+    apply_dotfile_plan
+  fi
+  # Also records files that already matched, so later local edits are visible to
+  # the next update even when this run changed nothing.
+  save_manifest
 }
 
 set_shell() {
@@ -344,10 +683,16 @@ set_shell() {
 }
 
 install_system_configs() {
-  if [[ -f "$SYSTEM_DIR/zram-generator.conf" ]]; then
-    log "Installing zram-generator configuration"
-    run_sudo install -Dm644 "$SYSTEM_DIR/zram-generator.conf" /etc/systemd/zram-generator.conf
+  local src="$SYSTEM_DIR/zram-generator.conf"
+  local dest=/etc/systemd/zram-generator.conf
+  [[ -f "$src" ]] || return 0
+  if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
+    ok "zram-generator configuration is up to date"
+    return 0
   fi
+  log "Installing zram-generator configuration"
+  run_sudo install -Dm644 "$src" "$dest"
+  SYSTEM_CONFIGS_CHANGED=1
 }
 
 enable_services() {
@@ -485,6 +830,249 @@ bootstrap_nvim() {
     -c "luafile $ROOT_DIR/scripts/nvim-mason.lua" -c qa || warn "Mason bootstrap failed"
 }
 
+missing_packages_from() {
+  local file="$1"
+  local -a pkgs=()
+  mapfile -t pkgs < <(read_packages "$file")
+  ((${#pkgs[@]})) || return 0
+  # -T reports packages that do not satisfy an installed dependency, so it
+  # honours provides such as linux-cachyos for linux.
+  pacman -T "${pkgs[@]}" 2>/dev/null || true
+}
+
+collect_package_drift() {
+  MISSING_REPO=()
+  MISSING_AUR=()
+  local file p
+  for file in core desktop dev; do
+    mapfile -t -O "${#MISSING_REPO[@]}" MISSING_REPO \
+      < <(missing_packages_from "$PACKAGES_DIR/$file.txt")
+  done
+  if ((INSTALL_APPS)); then
+    mapfile -t -O "${#MISSING_REPO[@]}" MISSING_REPO \
+      < <(missing_packages_from "$PACKAGES_DIR/apps.txt")
+  fi
+  if ((INSTALL_AUR)); then
+    mapfile -t MISSING_AUR < <(missing_packages_from "$PACKAGES_DIR/aur.txt")
+  fi
+
+  local -A seen=()
+  local -a repo=() aur=()
+  for p in "${MISSING_REPO[@]}"; do
+    [[ -n "$p" && -z "${seen[$p]:-}" ]] || continue
+    seen["$p"]=1
+    repo+=("$p")
+  done
+  seen=()
+  for p in "${MISSING_AUR[@]}"; do
+    [[ -n "$p" && -z "${seen[$p]:-}" ]] || continue
+    seen["$p"]=1
+    aur+=("$p")
+  done
+  MISSING_REPO=("${repo[@]}")
+  MISSING_AUR=("${aur[@]}")
+}
+
+report_package_drift() {
+  if ((${#MISSING_REPO[@]} + ${#MISSING_AUR[@]} == 0)); then
+    ok "All packages from the lists are installed"
+    return 0
+  fi
+  log "Packages in the lists that are missing here"
+  local p
+  for p in "${MISSING_REPO[@]}"; do
+    printf '  %smissing%s  %s\n' "$C_YELLOW" "$C_RESET" "$p"
+  done
+  for p in "${MISSING_AUR[@]}"; do
+    printf '  %smissing%s  %s (AUR)\n' "$C_YELLOW" "$C_RESET" "$p"
+  done
+}
+
+install_missing_packages() {
+  ((${#MISSING_REPO[@]} + ${#MISSING_AUR[@]})) || return 0
+  if ((NO_PACKAGES)); then
+    warn "Skipping missing packages (--no-packages)"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    log "[dry-run] install the missing packages listed above"
+    return 0
+  fi
+  if ! confirm "Install these packages now?"; then
+    warn "Skipping packages"
+    return 0
+  fi
+  if ((${#MISSING_REPO[@]})); then
+    log "Installing missing packages"
+    run_sudo pacman -S --needed --noconfirm "${MISSING_REPO[@]}" ||
+      warn "Some packages failed; run pacman -Syu and retry the update"
+  fi
+  if ((${#MISSING_AUR[@]})); then
+    install_yay
+    log "Installing missing AUR packages: ${MISSING_AUR[*]}"
+    yay -S --needed --noconfirm "${MISSING_AUR[@]}" ||
+      warn "Some AUR packages failed to install"
+  fi
+}
+
+sync_remote() {
+  if ((NO_PULL)); then
+    warn "Skipping remote check (--no-pull)"
+    return 0
+  fi
+  if [[ ! -d "$ROOT_DIR/.git" ]]; then
+    warn "Not a git checkout; skipping remote check"
+    return 0
+  fi
+  if ! command -v git >/dev/null; then
+    warn "git not found; skipping remote check"
+    return 0
+  fi
+  if ! git -C "$ROOT_DIR" remote get-url origin >/dev/null 2>&1; then
+    warn "No origin remote; skipping remote check"
+    return 0
+  fi
+
+  local branch upstream behind ahead head_before
+  branch="$(git -C "$ROOT_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  if [[ -z "$branch" ]]; then
+    warn "Detached HEAD; skipping remote check"
+    return 0
+  fi
+
+  log "Fetching origin/$branch"
+  if ! git -C "$ROOT_DIR" fetch --quiet --prune origin; then
+    warn "git fetch failed (offline?); updating from the local checkout"
+    return 0
+  fi
+
+  upstream="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  [[ -n "$upstream" ]] || upstream="origin/$branch"
+  if ! git -C "$ROOT_DIR" rev-parse --verify --quiet "$upstream" >/dev/null; then
+    warn "No remote branch $upstream; skipping remote check"
+    return 0
+  fi
+
+  behind="$(git -C "$ROOT_DIR" rev-list --count "HEAD..$upstream")"
+  ahead="$(git -C "$ROOT_DIR" rev-list --count "$upstream..HEAD")"
+  if ((behind == 0)); then
+    ok "Already up to date with $upstream"
+    ((ahead > 0)) && warn "$ahead local commit(s) not pushed to $upstream"
+    return 0
+  fi
+
+  log "$behind new commit(s) on $upstream:"
+  git -C "$ROOT_DIR" --no-pager log --oneline --no-decorate "HEAD..$upstream" || true
+  git -C "$ROOT_DIR" --no-pager diff --stat "HEAD..$upstream" || true
+
+  if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ]]; then
+    warn "The checkout has uncommitted changes; commit or stash them before updating"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    log "[dry-run] git pull --ff-only (would apply $behind commit(s))"
+    return 0
+  fi
+  if ! confirm "Pull these changes from $upstream?"; then
+    warn "Skipping pull; updating from the local checkout"
+    return 0
+  fi
+
+  head_before="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  if ! git -C "$ROOT_DIR" pull --ff-only --quiet origin "$branch"; then
+    warn "Could not fast-forward to $upstream; resolve the branch manually and rerun"
+    return 0
+  fi
+  ok "Updated to $(git -C "$ROOT_DIR" rev-parse --short HEAD)"
+
+  if git -C "$ROOT_DIR" diff --name-only "$head_before" HEAD | grep -qx 'install.sh' &&
+    [[ "${MIST_UPDATE_REEXEC:-0}" != "1" ]]; then
+    log "The installer itself changed; restarting with the new version"
+    export MIST_UPDATE_REEXEC=1
+    exec bash "$ROOT_DIR/install.sh" "${ORIGINAL_ARGS[@]}"
+  fi
+}
+
+plan_touched() {
+  local prefix="$1" rel
+  for rel in "${PLAN_ADD[@]}" "${PLAN_UPDATE[@]}" "${PLAN_CONFLICT[@]}" \
+    "${PLAN_REMOVE[@]}"; do
+    [[ "$rel" == "$prefix"* ]] && return 0
+  done
+  return 1
+}
+
+summary_update() {
+  printf '\nMist update finished.\n\n'
+  if ((CHECK_ONLY)); then
+    printf 'Nothing was changed (--check). Run ./install.sh --update to apply.\n'
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    printf 'Dry run: nothing was changed.\n'
+    return 0
+  fi
+  if ((DOTFILES_CHANGED)); then
+    cat <<'EOF'
+Reload the desktop to pick up the new configuration:
+  - Hyprland:  hyprctl reload
+  - Quickshell: log out and back in (or restart Hyprland)
+  - Ghostty:   open a new window
+
+Locally modified files that were kept have a .mist-new copy next to them.
+Rerun with --diff to inspect changes or --force to replace them.
+EOF
+  else
+    printf 'No dotfile changes were needed.\n'
+  fi
+  if ((SYSTEM_CONFIGS_CHANGED)); then
+    printf 'zram configuration changed; reboot for it to take effect.\n'
+  fi
+  printf '\n'
+}
+
+run_update() {
+  log "Mist update for $TARGET_USER ($TARGET_HOME)"
+  if ((CHECK_ONLY)); then
+    log "Check mode: reporting changes only"
+  elif ((DRY_RUN)); then
+    warn "Dry run enabled; no changes will be made"
+  elif ! confirm "Update Mist packages and dotfiles?"; then
+    die "Aborted"
+  fi
+
+  sync_remote
+
+  collect_package_drift
+  report_package_drift
+  install_missing_packages
+  if ((!NO_PACKAGES)); then
+    install_yay
+    install_pacseek
+  fi
+
+  deploy_dotfiles
+  install_system_configs
+
+  if plan_touched ".local/share/fonts/" || plan_touched ".config/fontconfig/"; then
+    refresh_font_cache
+  fi
+  if plan_touched ".config/ghostty/" || plan_touched ".config/quickshell/scripts/"; then
+    setup_theme
+  fi
+  if ((INSTALL_NVIM)) && plan_touched ".config/nvim/"; then
+    bootstrap_nvim
+  fi
+
+  install_opencode
+  install_discord_bridge
+  if ((!INSTALL_DISCORD_BRIDGE)) && plan_touched ".config/quickshell/discord-bridge/"; then
+    warn "DiscordBridge files changed; rerun with --discord-bridge to rebuild the plugin"
+  fi
+
+  summary_update
+}
+
 summary() {
   cat <<EOF
 
@@ -498,15 +1086,22 @@ Next steps:
   5. Open nvim and let any remaining LSP tools finish installing.
 
 Optional applications: run ./install.sh --full
+Update later: run ./install.sh --update
 Discord bar widget: run ./install.sh --discord-bridge (client mod)
 Firefox theme: enabled by the generated profile user.js; restart Firefox.
 EOF
 }
 
 main() {
+  ORIGINAL_ARGS=("$@")
   parse_args "$@"
   require_arch
   check_user
+
+  if ((UPDATE_MODE)); then
+    run_update
+    return 0
+  fi
 
   log "Mist setup for $TARGET_USER ($TARGET_HOME)"
   if ((DRY_RUN)); then
@@ -523,6 +1118,10 @@ main() {
   install_packages "$PACKAGES_DIR/dev.txt"
   install_microcode
   install_gpu_packages
+
+  # yay backs pacseek's AUR search and the optional AUR package group.
+  install_yay
+  install_pacseek
 
   if ((INSTALL_APPS)); then
     install_packages "$PACKAGES_DIR/apps.txt"

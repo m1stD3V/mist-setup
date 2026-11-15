@@ -13,5 +13,7 @@ fzf
 jq
 gcc
 make
+cmake
 pkgconf
+nlohmann-json
 shellcheck
