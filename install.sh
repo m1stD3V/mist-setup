@@ -25,6 +25,7 @@ CHECK_ONLY=0
 NO_PULL=0
 NO_PACKAGES=0
 FORCE_DOTFILES=0
+KEEP_LOCAL=0
 SHOW_DIFF=0
 ORIGINAL_ARGS=()
 
@@ -43,6 +44,7 @@ COLLECTED=()
 PLAN_ADD=()
 PLAN_UPDATE=()
 PLAN_ADOPT=()
+PLAN_LEGACY=()
 PLAN_CONFLICT=()
 PLAN_LOCAL=()
 PLAN_REMOVE=()
@@ -84,7 +86,10 @@ Options:
                      without changing anything (implies --update --dry-run)
       --no-pull      Do not fetch or pull from the git remote
       --no-packages  Do not install packages missing from the package lists
-      --force        Replace locally modified dotfiles (they are backed up)
+      --force        Replace dotfiles that were edited both locally and
+                     upstream (they are backed up)
+      --keep-local   Keep files with no deploy record instead of taking the
+                     repo version (default: replace, previous copy backed up)
       --diff         Show unified diffs for the dotfiles an update changes
       --full         Install optional apps, AUR packages, and OpenCode
       --apps         Install the optional applications group
@@ -119,6 +124,7 @@ parse_args() {
       --no-pull) NO_PULL=1 ;;
       --no-packages) NO_PACKAGES=1 ;;
       --force) FORCE_DOTFILES=1 ;;
+      --keep-local) KEEP_LOCAL=1 ;;
       --diff) SHOW_DIFF=1 ;;
       --full)
         INSTALL_APPS=1
@@ -420,7 +426,10 @@ deployed_matches_history() {
   [[ -d "$ROOT_DIR/.git" ]] || return 1
   while IFS= read -r commit; do
     [[ -n "$commit" ]] || continue
-    blob_hash="$(git -C "$ROOT_DIR" cat-file -p "$commit:dotfiles/$rel" 2>/dev/null |
+    # The path may be absent at a commit that touched it (a deletion, or a
+    # rename on another branch); skip those instead of failing.
+    git -C "$ROOT_DIR" cat-file -e "$commit:dotfiles/$rel" 2>/dev/null || continue
+    blob_hash="$(git -C "$ROOT_DIR" cat-file -p "$commit:dotfiles/$rel" |
       sha256sum | cut -d' ' -f1)"
     [[ "$blob_hash" == "$dep_hash" ]] && return 0
   done < <(git -C "$ROOT_DIR" log --all --pretty=format:%H -- "dotfiles/$rel" 2>/dev/null)
@@ -453,6 +462,7 @@ plan_dotfiles() {
   PLAN_ADD=()
   PLAN_UPDATE=()
   PLAN_ADOPT=()
+  PLAN_LEGACY=()
   PLAN_CONFLICT=()
   PLAN_LOCAL=()
   PLAN_REMOVE=()
@@ -485,11 +495,12 @@ plan_dotfiles() {
     base_hash="${MANIFEST[$rel]:-}"
     if [[ -z "$base_hash" ]]; then
       # No manifest entry: this is either a stale deploy from an older revision
-      # or a local edit. History tells them apart; anything unknown is kept.
+      # or a local edit. History tells them apart; anything else converges to
+      # the repo version with a backup (see PLAN_LEGACY).
       if deployed_matches_history "$rel" "$dep_hash"; then
         PLAN_UPDATE+=("$rel")
       else
-        PLAN_CONFLICT+=("$rel")
+        PLAN_LEGACY+=("$rel")
       fi
     elif [[ "$dep_hash" == "$base_hash" ]]; then
       PLAN_UPDATE+=("$rel")
@@ -526,8 +537,9 @@ show_diff() {
 
 report_dotfile_plan() {
   local rel total
-  total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_CONFLICT[@]} +
-    ${#PLAN_LOCAL[@]} + ${#PLAN_REMOVE[@]} + ${#PLAN_KEEP_REMOVED[@]}))
+  total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_LEGACY[@]} +
+    ${#PLAN_CONFLICT[@]} + ${#PLAN_LOCAL[@]} + ${#PLAN_REMOVE[@]} +
+    ${#PLAN_KEEP_REMOVED[@]}))
   if ((total == 0)); then
     ok "Dotfiles already up to date"
     return 0
@@ -543,6 +555,16 @@ report_dotfile_plan() {
   done
   for rel in "${PLAN_REMOVE[@]}"; do
     printf '  %sremove%s   ~/%s\n' "$C_YELLOW" "$C_RESET" "$rel"
+  done
+  for rel in "${PLAN_LEGACY[@]}"; do
+    if ((KEEP_LOCAL)); then
+      printf '  %sconflict%s ~/%s (kept; repo copy saved as ~/%s.mist-new)\n' \
+        "$C_YELLOW" "$C_RESET" "$rel" "$rel"
+    else
+      printf '  %supdate%s   ~/%s (no deploy record; previous copy backed up)\n' \
+        "$C_BLUE" "$C_RESET" "$rel"
+    fi
+    show_diff "$rel"
   done
   for rel in "${PLAN_CONFLICT[@]}"; do
     if ((FORCE_DOTFILES)); then
@@ -581,7 +603,7 @@ backup_file() {
 apply_dotfile_plan() {
   local stamp rel src dest backup
   stamp="$(date +%Y%m%d-%H%M%S)"
-  local added=0 updated=0 replaced=0 removed=0 kept=0
+  local added=0 updated=0 replaced=0 removed=0 kept_legacy=0 kept_conflicts=0
 
   for rel in "${PLAN_ADD[@]}"; do
     src="$DOTFILES_DIR/$rel"
@@ -604,6 +626,22 @@ apply_dotfile_plan() {
     printf '  backup %s\n' "$backup"
   done
 
+  for rel in "${PLAN_LEGACY[@]}"; do
+    src="$DOTFILES_DIR/$rel"
+    dest="$TARGET_HOME/$rel"
+    if ((KEEP_LOCAL)); then
+      cp -a "$src" "$dest.mist-new"
+      kept_legacy=$((kept_legacy + 1))
+    else
+      backup="$(backup_file "$dest" "$stamp")"
+      cp -a "$src" "$dest"
+      rm -f "$dest.mist-new"
+      MANIFEST["$rel"]="$(hash_file "$src")"
+      updated=$((updated + 1))
+      printf '  backup %s\n' "$backup"
+    fi
+  done
+
   for rel in "${PLAN_CONFLICT[@]}"; do
     src="$DOTFILES_DIR/$rel"
     dest="$TARGET_HOME/$rel"
@@ -616,7 +654,7 @@ apply_dotfile_plan() {
       printf '  backup %s\n' "$backup"
     else
       cp -a "$src" "$dest.mist-new"
-      kept=$((kept + 1))
+      kept_conflicts=$((kept_conflicts + 1))
     fi
   done
 
@@ -640,8 +678,11 @@ apply_dotfile_plan() {
   done
 
   ok "Dotfiles: $added added, $updated updated, $replaced forced, $removed removed"
-  if ((kept > 0 && !FORCE_DOTFILES)); then
-    warn "$kept locally modified file(s) kept; review the .mist-new copies or rerun with --force"
+  if ((kept_legacy > 0)); then
+    warn "$kept_legacy file(s) with no deploy record kept (--keep-local); rerun without it to replace them"
+  fi
+  if ((kept_conflicts > 0 && !FORCE_DOTFILES)); then
+    warn "$kept_conflicts file(s) edited both locally and upstream kept; review the .mist-new copies or rerun with --force"
   fi
 }
 
@@ -652,8 +693,8 @@ deploy_dotfiles() {
   }
   collect_dotfiles
   plan_dotfiles
-  local total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_CONFLICT[@]} +
-    ${#PLAN_REMOVE[@]} + GENERATED_MISSING))
+  local total=$((${#PLAN_ADD[@]} + ${#PLAN_UPDATE[@]} + ${#PLAN_LEGACY[@]} +
+    ${#PLAN_CONFLICT[@]} + ${#PLAN_REMOVE[@]} + GENERATED_MISSING))
   if ((total > 0)); then
     DOTFILES_CHANGED=1
   fi
@@ -995,8 +1036,8 @@ sync_remote() {
 
 plan_touched() {
   local prefix="$1" rel
-  for rel in "${PLAN_ADD[@]}" "${PLAN_UPDATE[@]}" "${PLAN_CONFLICT[@]}" \
-    "${PLAN_REMOVE[@]}"; do
+  for rel in "${PLAN_ADD[@]}" "${PLAN_UPDATE[@]}" "${PLAN_LEGACY[@]}" \
+    "${PLAN_CONFLICT[@]}" "${PLAN_REMOVE[@]}"; do
     [[ "$rel" == "$prefix"* ]] && return 0
   done
   return 1
@@ -1018,10 +1059,14 @@ Reload the desktop to pick up the new configuration:
   - Hyprland:  hyprctl reload
   - Quickshell: log out and back in (or restart Hyprland)
   - Ghostty:   open a new window
-
-Locally modified files that were kept have a .mist-new copy next to them.
-Rerun with --diff to inspect changes or --force to replace them.
 EOF
+    if ((KEEP_LOCAL)); then
+      printf 'Files with no deploy record were kept; repo versions are in *.mist-new.\n'
+    else
+      printf 'Files replaced without a deploy record have a .pre-mist-<timestamp> backup.\n'
+    fi
+    printf 'Files edited both locally and upstream are kept in place with *.mist-new;\n'
+    printf 'rerun with --force to replace them.\n'
   else
     printf 'No dotfile changes were needed.\n'
   fi

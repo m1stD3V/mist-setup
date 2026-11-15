@@ -72,7 +72,8 @@ Common options:
 ./install.sh --check            # report remote commits, package and dotfile drift
 ./install.sh --update           # fetch, pull, install missing packages, deploy changes
 ./install.sh --update --diff    # also show unified diffs for changed dotfiles
-./install.sh --update --force   # replace locally modified files (backed up first)
+./install.sh --update --force   # replace files edited both locally and upstream
+./install.sh --update --keep-local  # keep files with no deploy record
 ```
 
 It works in three steps:
@@ -93,12 +94,16 @@ It works in three steps:
    - local edits are kept; if upstream also changed the file, the repo version
      is written next to it as `*.mist-new` for review
    - locally modified files removed upstream are kept
+   - files deployed before the manifest existed have no deploy record, so the
+     repo version wins with a `.pre-mist-<timestamp>` backup of the old file;
+     pass `--keep-local` to keep them and review the `.mist-new` copies
+     instead
 
-   `--force` replaces locally modified files instead (still backing them up),
-   and `--check` (or `--dry-run`) only reports what would happen. Files
-   generated from the wallpaper, such as `~/.config/ghostty/theme`, belong to
-   the theme scripts: they are seeded when missing and never overwritten by an
-   update.
+   `--force` replaces files edited both locally and upstream (still backing
+   them up), and `--check` (or `--dry-run`) only reports what would happen.
+   Files generated from the wallpaper, such as `~/.config/ghostty/theme`,
+   belong to the theme scripts: they are seeded when missing and never
+   overwritten by an update.
 
 `--no-pull` skips the remote step and updates from the current checkout, which
 is useful when the repository is the source of truth for local changes. After a
