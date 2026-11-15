@@ -19,9 +19,9 @@ Rectangle {
 
     implicitWidth: 150
     implicitHeight: Theme.barHeight - 10
-    color: hover.hovered || popup.open ? Theme.inverseBg : "transparent"
+    color: hover.hovered || popup.open ? Theme.highlight : "transparent"
     border.width: 1
-    border.color: hover.hovered || popup.open ? Theme.inverseBg : Theme.borderHigh
+    border.color: hover.hovered || popup.open ? Theme.highlight : Theme.borderHigh
 
     HoverHandler {
         id: hover

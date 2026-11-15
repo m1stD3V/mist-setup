@@ -13,6 +13,11 @@ Singleton {
     readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/quickshell-discord.sock"
     readonly property string ringSound: Quickshell.shellPath("assets/ring.wav")
 
+    // the Discord desktop app itself, independent of the bridge: lets the bar
+    // module start, focus or kill it even when no call is active
+    readonly property string appBinary: "/usr/bin/discord"
+    property bool appRunning: false
+
     // bridge state
     readonly property bool bridgeUp: sock.connected
     property bool ready: false
@@ -84,9 +89,79 @@ Singleton {
 
     function focusDiscord(): void {
         const win = Hypr.findToplevelByClass("DISCORD");
-        if (win && Hypr.isMinimized(win))
-            Hypr.restoreWindow(win);
+        if (win) {
+            if (Hypr.isMinimized(win))
+                Hypr.restoreWindow(win);
+            else
+                Hypr.dispatch(Hypr.usingLua ? `hl.dsp.focus({ window = "address:${Hypr.addressOf(win)}" })` : `focuswindow address:${Hypr.addressOf(win)}`);
+        }
         send("focus");
+    }
+
+    // polled so the module knows whether the app is there to focus or to start
+    function refreshAppRunning(): void {
+        if (!appCheck.running)
+            appCheck.running = true;
+    }
+
+    function launchApp(): void {
+        // route through Hyprland like the auto-repair script does, so window
+        // rules place the new window; there is nothing to do while killing
+        if (killProc.running)
+            return;
+        Hypr.dispatch(Hypr.usingLua ? `hl.dsp.exec_cmd("${appBinary}")` : `exec ${appBinary}`);
+        appRunning = true;
+        appCheckTimer.restart();
+    }
+
+    // SIGTERM, then SIGKILL whatever is left: the whole Electron tree, not
+    // just the main process
+    function killApp(): void {
+        if (killProc.running)
+            return;
+        killProc.running = true;
+    }
+
+    Process {
+        id: appCheck
+
+        command: ["pgrep", "-x", "Discord"]
+
+        onExited: (code, status) => {
+            if (!killProc.running)
+                root.appRunning = code === 0;
+        }
+    }
+
+    Timer {
+        id: appCheckTimer
+
+        interval: 3000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+
+        onTriggered: {
+            if (!killProc.running)
+                root.refreshAppRunning();
+        }
+    }
+
+    Process {
+        id: killProc
+
+        command: ["sh", "-c", "pkill -x Discord; sleep 2; pkill -9 -x Discord >/dev/null 2>&1; exit 0"]
+
+        onExited: (code, status) => {
+            root.appRunning = false;
+            // the bridge dies with the app; clear its state right away instead
+            // of waiting for the socket to drop
+            root.ready = false;
+            root.call = null;
+            root.incoming = null;
+            root.friends = [];
+            root.onlineFriends = 0;
+        }
     }
 
     Socket {
@@ -153,6 +228,17 @@ Singleton {
 
         function focus(): void {
             root.focusDiscord();
+        }
+
+        function open(): void {
+            if (root.appRunning)
+                root.focusDiscord();
+            else
+                root.launchApp();
+        }
+
+        function kill(): void {
+            root.killApp();
         }
     }
 }

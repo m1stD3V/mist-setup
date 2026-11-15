@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the Discord install directory for version updates
+
+[Path]
+PathModified=%h/.config/discord
+Unit=quickshell-discord-bridge.service
+
+[Install]
+WantedBy=default.target

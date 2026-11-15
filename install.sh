@@ -18,6 +18,7 @@ INSTALL_AUR=0
 INSTALL_NVIM=1
 INSTALL_OPENCODE=0
 INSTALL_NVIDIA=0
+INSTALL_DISCORD_BRIDGE=0
 
 C_RESET=$'\033[0m'
 C_BLUE=$'\033[34m'
@@ -48,6 +49,9 @@ Options:
       --aur          Install AUR packages (implies --apps)
       --opencode     Install the OpenCode CLI into ~/.opencode
       --nvidia       Install the NVIDIA open driver if NVIDIA is detected
+      --discord-bridge
+                     Patch the Discord desktop app with the Quickshell
+                     DiscordBridge plugin (client mod; see CREDITS.md)
       --no-apps      Skip optional applications
       --no-aur       Skip AUR packages
       --no-nvim      Skip Neovim plugin bootstrap
@@ -76,6 +80,7 @@ parse_args() {
         ;;
       --opencode) INSTALL_OPENCODE=1 ;;
       --nvidia) INSTALL_NVIDIA=1 ;;
+      --discord-bridge) INSTALL_DISCORD_BRIDGE=1 ;;
       --no-apps) INSTALL_APPS=0 ;;
       --no-aur) INSTALL_AUR=0 ;;
       --no-nvim) INSTALL_NVIM=0 ;;
@@ -350,15 +355,30 @@ enable_services() {
   run_sudo systemctl enable --now NetworkManager
   run_sudo systemctl enable --now bluetooth
   run_sudo systemctl enable --now fstrim.timer
+  # the bar's power widget reads and switches profiles through this daemon
+  run_sudo systemctl enable --now power-profiles-daemon.service
+}
+
+enable_app_services() {
+  ((INSTALL_APPS)) || return 0
+  log "Enabling optional application services"
+  # Printing stack from packages/apps.txt
+  run_sudo systemctl enable --now cups.socket
+  run_sudo systemctl enable --now cups.path
+  run_sudo systemctl enable --now firewalld
 }
 
 setup_theme() {
   local state_dir="$TARGET_HOME/.local/state/mist"
   local wallpaper=""
-  local theme_script="$TARGET_HOME/.config/ghostty/sync-theme.py"
+  local -a theme_scripts=(
+    "$TARGET_HOME/.config/ghostty/sync-theme.py"
+    "$TARGET_HOME/.config/quickshell/scripts/sync-firefox-theme.py"
+    "$TARGET_HOME/.config/quickshell/scripts/sync-openchamber-theme.py"
+  )
 
   if ((DRY_RUN)); then
-    log "[dry-run] initialize wallpaper state and Ghostty theme"
+    log "[dry-run] initialize wallpaper state and per-app themes"
     return 0
   fi
 
@@ -371,9 +391,18 @@ setup_theme() {
     printf '%s\n' "$wallpaper" >"$state_dir/wallpaper"
   fi
 
-  if [[ -x "$theme_script" || -f "$theme_script" ]]; then
-    HOME="$TARGET_HOME" python3 "$theme_script" || warn "Failed to generate Ghostty theme"
+  if ! command -v python3 >/dev/null; then
+    warn "python3 not found; skipping theme generation"
+    return 0
   fi
+
+  # Same wallpaper state feeds the Ghostty, Firefox and OpenChamber themes, so
+  # the shell, terminal, browser and editor start on one palette.
+  local script
+  for script in "${theme_scripts[@]}"; do
+    [[ -f "$script" ]] || continue
+    HOME="$TARGET_HOME" python3 "$script" || warn "Failed to generate $(basename "$script") output"
+  done
 }
 
 install_opencode() {
@@ -397,6 +426,35 @@ install_opencode() {
     warn "OpenCode download failed"
   fi
   rm -f "$oc_installer"
+}
+
+install_discord_bridge() {
+  ((INSTALL_DISCORD_BRIDGE)) || return 0
+  local bridge_script="$TARGET_HOME/.config/quickshell/discord-bridge/install.sh"
+  if [[ ! -f "$bridge_script" ]]; then
+    warn "DiscordBridge installer missing; rerun without --no-dotfiles"
+    return 0
+  fi
+  if ! command -v node >/dev/null; then
+    warn "node is required to build the DiscordBridge plugin; skipping"
+    return 0
+  fi
+  if [[ ! -d "$TARGET_HOME/.config/discord" ]]; then
+    warn "Discord is not installed for $TARGET_USER; skipping DiscordBridge"
+    return 0
+  fi
+  if ((DRY_RUN)); then
+    log "[dry-run] build and inject the DiscordBridge plugin with $bridge_script"
+    return 0
+  fi
+
+  log "Patching Discord with the Quickshell DiscordBridge plugin (client mod)"
+  HOME="$TARGET_HOME" \
+    XDG_CONFIG_HOME="$TARGET_HOME/.config" \
+    XDG_DATA_HOME="$TARGET_HOME/.local/share" \
+    XDG_STATE_HOME="$TARGET_HOME/.local/state" \
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u "$TARGET_USER")}" \
+    bash "$bridge_script" || warn "DiscordBridge install failed; see its output above"
 }
 
 bootstrap_nvim() {
@@ -440,6 +498,8 @@ Next steps:
   5. Open nvim and let any remaining LSP tools finish installing.
 
 Optional applications: run ./install.sh --full
+Discord bar widget: run ./install.sh --discord-bridge (client mod)
+Firefox theme: enabled by the generated profile user.js; restart Firefox.
 EOF
 }
 
@@ -475,6 +535,8 @@ main() {
     install_aur_packages
   fi
 
+  enable_app_services
+
   install_omz
   install_p10k
   install_fonts
@@ -485,6 +547,7 @@ main() {
   set_shell
   setup_theme
   install_opencode
+  install_discord_bridge
   bootstrap_nvim
 
   summary

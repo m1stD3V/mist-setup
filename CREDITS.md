@@ -80,6 +80,18 @@ the repository remains MIT-licensed.
 [Equicord](https://github.com/Equicord/Equicord) at install time; Equicord is
 GPL-3.0. That checkout is not part of this repository.
 
+`discord-bridge/auto-repair.sh`, `discord-bridge/setup-auto-repair.sh` and the
+unit templates in `discord-bridge/systemd/` are part of this repository and stay
+MIT-licensed; they only build and run the patched client.
+
+## Generated themes
+
+`dotfiles/.config/quickshell/scripts/sync-firefox-theme.py` and
+`dotfiles/.config/quickshell/scripts/sync-openchamber-theme.py` generate theme
+files for Firefox and OpenChamber from the current wallpaper. They write only to
+the user's own Firefox profile and `~/.config/openchamber/themes`; neither
+project's files are copied into this repository.
+
 ## Updating this file
 
 If you add or replace an asset, add a row with its author, source URL and

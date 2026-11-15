@@ -5,11 +5,13 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Theme
 import qs.components
+import qs.services
 
 // Layer-shell popup shown below the bar. Callers choose which screen edge to
 // align to (or center); anchoring to an item is also supported.
 // PopupWindow cannot attach to layer surfaces, so popouts are their own
-// overlay PanelWindows positioned manually.
+// overlay PanelWindows positioned manually. Each popup covers all the space
+// below the bar so clicking anywhere outside the box dismisses it.
 PanelWindow {
     id: popupRoot
 
@@ -23,6 +25,10 @@ PanelWindow {
     property string screenEdge: "left"
     property bool open: false
 
+    // Top-left corner of the box, relative to the popup window.
+    property int boxX: Theme.spacingSm
+    readonly property int boxY: Theme.spacingXs
+
     function reposition(): void {
         const screenW = barWindow.screen?.width ?? 0;
         let x = Theme.spacingSm;
@@ -34,24 +40,32 @@ PanelWindow {
             const rect = barWindow.itemRect(anchorItem);
             x = Math.round(rect.x + rect.width / 2 - contentWidth / 2);
         }
-        margins.left = Math.max(Theme.spacingSm, Math.min(screenW - contentWidth - Theme.spacingSm, x));
-        margins.top = Theme.barHeight + Theme.spacingXs;
+        boxX = Math.max(Theme.spacingSm, Math.min(screenW - contentWidth - Theme.spacingSm, x));
     }
 
     visible: open
     screen: barWindow.screen
     anchors {
         top: true
+        bottom: true
         left: true
+        right: true
     }
-    implicitWidth: contentWidth
-    implicitHeight: contentHeight
+    // Leave the bar itself usable; the window catches everything below it.
+    margins.top: Theme.barHeight
     exclusionMode: ExclusionMode.Ignore
     exclusiveZone: -1
     color: "transparent"
     focusable: open
 
     WlrLayershell.layer: WlrLayer.Overlay
+
+    onOpenChanged: {
+        if (open)
+            ShellState.activatePopup(popupRoot);
+        else
+            ShellState.deactivatePopup(popupRoot);
+    }
 
     Shortcut {
         sequences: ["Escape"]
@@ -62,14 +76,37 @@ PanelWindow {
     onVisibleChanged: if (visible)
         reposition()
 
-    onContentHeightChanged: if (visible)
-        reposition()
-
     onContentWidthChanged: if (visible)
         reposition()
 
-    Box {
+    onScreenEdgeChanged: if (visible)
+        reposition()
+
+    onAnchorItemChanged: if (visible)
+        reposition()
+
+    // Any click outside the box dismisses the popup.
+    MouseArea {
         anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+
+        onClicked: popupRoot.open = false
+    }
+
+    // Clicks on the frame's border/padding belong to the popup, not to the
+    // dismiss area underneath.
+    MouseArea {
+        x: popupRoot.boxX
+        y: popupRoot.boxY
+        width: popupRoot.contentWidth
+        height: popupRoot.contentHeight
+    }
+
+    Box {
+        x: popupRoot.boxX
+        y: popupRoot.boxY
+        width: popupRoot.contentWidth
+        height: popupRoot.contentHeight
         title: popupRoot.title
 
         Loader {

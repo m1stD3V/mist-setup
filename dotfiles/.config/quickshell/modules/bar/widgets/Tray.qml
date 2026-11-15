@@ -125,7 +125,7 @@ Row {
 
                         width: parent.width
                         height: modelData.isSeparator ? 9 : Theme.popupRowHeight
-                        color: mouse.hovered && menuEntry.modelData.enabled && !menuEntry.modelData.isSeparator ? Theme.inverseBg : "transparent"
+                        color: mouse.hovered && menuEntry.modelData.enabled && !menuEntry.modelData.isSeparator ? Theme.highlight : "transparent"
 
                         Rectangle {
                             anchors.centerIn: parent

@@ -14,8 +14,8 @@ Rectangle {
     property PanelWindow window
     property string mode: "call"
 
-    // only occupy bar space while the Discord bridge is connected
-    visible: Discord.bridgeUp
+    // Bar.qml keeps the module on the bar whenever Settings.showDiscord is on,
+    // even with Discord closed, so it can be started again from here.
 
     onVisibleChanged: {
         if (!visible)
@@ -33,9 +33,9 @@ Rectangle {
 
     implicitWidth: labelRow.implicitWidth + 10
     implicitHeight: Theme.barHeight - 10
-    color: hover.hovered || popup.open ? Theme.inverseBg : "transparent"
+    color: hover.hovered || popup.open ? Theme.highlight : "transparent"
     border.width: 1
-    border.color: hover.hovered || popup.open ? Theme.inverseBg : Theme.borderHigh
+    border.color: hover.hovered || popup.open ? Theme.highlight : Theme.borderHigh
 
     HoverHandler {
         id: hover
@@ -61,12 +61,10 @@ Rectangle {
             implicitHeight: badgeText.implicitHeight + 2
             color: {
                 if (Discord.ringing)
-                    return Theme.blink ? Theme.textHigh : Theme.textMuted;
-                if (hover.hovered || popup.open)
-                    return Theme.inverseText;
+                    return Theme.blink ? Theme.textHigh : Theme.textDim;
                 if (Discord.inCall)
                     return Theme.accent;
-                return Theme.surfaceHighest;
+                return Theme.inverseBg;
             }
 
             RText {
@@ -82,13 +80,7 @@ Rectangle {
                         return String(Discord.onlineFriends);
                     return "--";
                 }
-                color: {
-                    if (Discord.ringing)
-                        return Theme.bg;
-                    if (hover.hovered || popup.open)
-                        return Theme.bg;
-                    return Theme.inverseText;
-                }
+                color: Discord.ringing ? Theme.bg : Theme.inverseText
                 font.pixelSize: Theme.fontExtraSmall
             }
         }
@@ -125,6 +117,8 @@ Rectangle {
                     spacing: Theme.spacingSm
 
                     Item {
+                        id: tabHeader
+
                         width: parent.width
                         height: 24
 
@@ -152,6 +146,8 @@ Rectangle {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             text: {
+                                if (!Discord.appRunning)
+                                    return "OFFLINE";
                                 if (!Discord.bridgeUp)
                                     return "BRIDGE OFF";
                                 if (!Discord.ready)
@@ -160,12 +156,14 @@ Rectangle {
                                     return "IN CALL";
                                 return "READY";
                             }
-                            color: Discord.bridgeUp && Discord.ready ? Theme.textDim : Theme.textMuted
+                            color: Discord.appRunning && Discord.bridgeUp && Discord.ready ? Theme.textDim : Theme.textMuted
                             font.pixelSize: Theme.fontExtraSmall
                         }
                     }
 
                     Rectangle {
+                        id: tabSep
+
                         width: parent.width
                         height: 1
                         color: Theme.borderHigh
@@ -175,7 +173,7 @@ Rectangle {
                         id: flick
 
                         width: parent.width
-                        height: parent.height - 24 - 1 - 2 * Theme.spacingSm
+                        height: parent.height - tabHeader.height - tabSep.height - footSep.height - footRow.height - 4 * Theme.spacingSm
                         contentWidth: width
                         contentHeight: body.implicitHeight
                         clip: true
@@ -644,6 +642,42 @@ Rectangle {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    Rectangle {
+                        id: footSep
+
+                        width: parent.width
+                        height: 1
+                        color: Theme.borderHigh
+                    }
+
+                    Item {
+                        id: footRow
+
+                        width: parent.width
+                        height: 24
+
+                        DiscordButton {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            label: Discord.appRunning ? "OPEN" : "START"
+                            onClicked: {
+                                if (Discord.appRunning)
+                                    Discord.focusDiscord();
+                                else
+                                    Discord.launchApp();
+                            }
+                        }
+
+                        DiscordButton {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: Discord.appRunning
+                            label: "KILL"
+                            danger: true
+                            onClicked: Discord.killApp()
                         }
                     }
                 }

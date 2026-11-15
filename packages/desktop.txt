@@ -15,6 +15,7 @@ starship
 fastfetch
 btop
 brightnessctl
+power-profiles-daemon
 grim
 slurp
 wl-clipboard

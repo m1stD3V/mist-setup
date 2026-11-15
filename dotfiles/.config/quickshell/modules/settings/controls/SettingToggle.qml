@@ -54,7 +54,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: 44
         height: 18
-        color: root.checked ? Theme.inverseBg : Theme.surfaceHigh
+        color: root.checked ? Theme.highlight : Theme.surfaceHigh
         border.width: 1
         border.color: hover.hovered ? Theme.textHigh : Theme.borderHigh
 

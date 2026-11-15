@@ -123,7 +123,7 @@ PanelWindow {
 
                         width: actionText.implicitWidth + 16
                         height: 22
-                        color: actionMouse.hovered ? Theme.inverseBg : Theme.surfaceHigh
+                        color: actionMouse.hovered ? Theme.highlight : Theme.surfaceHigh
                         border.width: 1
                         border.color: Theme.borderHigh
 

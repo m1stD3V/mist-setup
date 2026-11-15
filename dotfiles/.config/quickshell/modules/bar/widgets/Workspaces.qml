@@ -34,10 +34,23 @@ Row {
 
             readonly property bool hovered: mouse.containsMouse
 
-            color: isActive ? Theme.inverseBg : "transparent"
+            color: "transparent"
+
+            // highlight inset from the container border so it reads as a
+            // separate chip rather than touching the frame
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 3
+                anchors.bottomMargin: 3
+                anchors.leftMargin: 1
+                anchors.rightMargin: 1
+                color: cell.isActive ? Theme.highlight : "transparent"
+            }
 
             RText {
-                anchors.centerIn: parent
+                id: label
+
+                anchors.verticalCenter: parent.verticalCenter
                 text: cell.isActive || cell.occupied || cell.hovered ? cell.wsId : "·"
                 font.pixelSize: Theme.fontSmall
                 color: {
@@ -47,6 +60,19 @@ Row {
                         return Theme.text;
                     return Theme.textMuted;
                 }
+
+                // Tiny5 leaves a wide right side bearing after each glyph, so
+                // centring the text box puts numbers left of the cell's centre.
+                // Centre the ink box instead.
+                TextMetrics {
+                    id: ink
+
+                    font.family: label.font.family
+                    font.pixelSize: label.font.pixelSize
+                    text: label.text
+                }
+
+                x: (cell.width - width) / 2 + (width - ink.boundingRect.width) / 2 - ink.boundingRect.x
             }
 
             MouseArea {

@@ -33,6 +33,7 @@ PanelWindow {
             }
             tray?.closeMenu();
             vol?.closePopup();
+            battery?.closePopup();
             ntf?.closePopup();
             dsc?.closePopup();
             menu?.closePopup();
@@ -96,7 +97,9 @@ PanelWindow {
                 DiscordWidget {
                     id: dsc
                     window: root
-                    visible: Settings.showDiscord && Discord.bridgeUp
+                    // gone from the bar once the app is killed; only comes back
+                    // when Discord is started again
+                    visible: Settings.showDiscord && Discord.appRunning
                 }
                 Widgets.Volume {
                     id: vol
@@ -105,12 +108,10 @@ PanelWindow {
                 }
             }
 
-            Widgets.BarModule {
-                visible: Settings.showBattery && battery.visible
-
-                Widgets.BatteryW {
-                    id: battery
-                }
+            Widgets.BatteryW {
+                id: battery
+                window: root
+                visible: Settings.showBattery && Host.batteryPresent
             }
 
             Widgets.Clock {

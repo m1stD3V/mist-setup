@@ -93,6 +93,13 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
 
+    onOpenChanged: {
+        if (open)
+            ShellState.activatePopup(popupRoot);
+        else
+            ShellState.deactivatePopup(popupRoot);
+    }
+
     Shortcut {
         sequences: ["Escape"]
 
@@ -208,7 +215,7 @@ PanelWindow {
 
                             width: list.width
                             height: 27
-                            color: index === popupRoot.selectedIndex ? Theme.inverseBg : (mouse.hovered ? Theme.surfaceHigh : "transparent")
+                            color: index === popupRoot.selectedIndex ? Theme.highlight : (mouse.hovered ? Theme.surfaceHigh : "transparent")
 
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter

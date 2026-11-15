@@ -13,9 +13,9 @@ Rectangle {
 
     implicitWidth: labelText.implicitWidth + 14
     implicitHeight: 22
-    color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.inverseBg) : Theme.surfaceHigh
+    color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.highlight) : Theme.surfaceHigh
     border.width: 1
-    border.color: hover.hovered ? Theme.textHigh : Theme.borderHigh
+    border.color: hover.hovered ? (root.danger ? Theme.textHigh : Theme.highlight) : Theme.borderHigh
 
     HoverHandler {
         id: hover

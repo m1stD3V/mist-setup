@@ -18,6 +18,8 @@ Singleton {
     // set at press-time by popup buttons so the bar background tap
     // does not close the very popup the same click just opened
     property bool popupClickGuard: false
+    // small bar popup currently open; opening another closes it first
+    property var activePopup: null
 
     // OSD state
     property string osdKind: ""
@@ -36,6 +38,7 @@ Singleton {
     function toggleLauncher(): void {
         launcherOpen = !launcherOpen;
         if (launcherOpen) {
+            dismissPopup();
             sysmonOpen = false;
             sessionOpen = false;
             appsOpen = false;
@@ -46,6 +49,7 @@ Singleton {
     function toggleSysmon(): void {
         sysmonOpen = !sysmonOpen;
         if (sysmonOpen) {
+            dismissPopup();
             launcherOpen = false;
             sessionOpen = false;
             appsOpen = false;
@@ -56,6 +60,7 @@ Singleton {
     function toggleSession(): void {
         sessionOpen = !sessionOpen;
         if (sessionOpen) {
+            dismissPopup();
             launcherOpen = false;
             sysmonOpen = false;
             appsOpen = false;
@@ -64,6 +69,7 @@ Singleton {
     }
 
     function closeAll(): void {
+        dismissPopup();
         launcherOpen = false;
         sysmonOpen = false;
         sessionOpen = false;
@@ -72,9 +78,26 @@ Singleton {
         settingsOpen = false;
     }
 
+    function dismissPopup(): void {
+        if (activePopup)
+            activePopup.open = false;
+    }
+
+    function activatePopup(popup: var): void {
+        if (activePopup && activePopup !== popup)
+            activePopup.open = false;
+        activePopup = popup;
+    }
+
+    function deactivatePopup(popup: var): void {
+        if (activePopup === popup)
+            activePopup = null;
+    }
+
     function toggleWallpaper(): void {
         wallpaperOpen = !wallpaperOpen;
         if (wallpaperOpen) {
+            dismissPopup();
             launcherOpen = false;
             sysmonOpen = false;
             sessionOpen = false;
@@ -86,6 +109,7 @@ Singleton {
     function toggleSettings(): void {
         settingsOpen = !settingsOpen;
         if (settingsOpen) {
+            dismissPopup();
             launcherOpen = false;
             sysmonOpen = false;
             sessionOpen = false;
@@ -101,6 +125,7 @@ Singleton {
         }
         appsTab = "processes";
         appsOpen = true;
+        dismissPopup();
         launcherOpen = false;
         sysmonOpen = false;
         sessionOpen = false;
@@ -111,6 +136,7 @@ Singleton {
     function openApps(tab: string): void {
         appsTab = tab;
         appsOpen = true;
+        dismissPopup();
         launcherOpen = false;
         sysmonOpen = false;
         sessionOpen = false;

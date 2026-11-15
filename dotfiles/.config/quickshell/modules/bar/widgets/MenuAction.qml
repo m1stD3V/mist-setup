@@ -13,9 +13,9 @@ Rectangle {
 
     implicitWidth: labelText.implicitWidth + 20
     implicitHeight: Theme.popupRowHeight
-    color: hover.hovered ? Theme.inverseBg : "transparent"
+    color: hover.hovered ? Theme.highlight : "transparent"
     border.width: 0
-    border.color: Theme.inverseBg
+    border.color: Theme.highlight
 
     HoverHandler {
         id: hover

@@ -65,6 +65,27 @@ Singleton {
     }
 
     Process {
+        id: firefoxThemeProc
+
+        command: ["python3", Quickshell.env("HOME") + "/.config/quickshell/scripts/sync-firefox-theme.py", root.current]
+    }
+
+    Process {
+        id: openchamberThemeProc
+
+        command: ["python3", Quickshell.env("HOME") + "/.config/quickshell/scripts/sync-openchamber-theme.py", root.current]
+    }
+
+    // regenerate per-app themes from the new palette (Firefox picks its files
+    // up on its next start, ghostty reloads its palette live, OpenChamber
+    // watches its themes folder and reloads live)
+    function syncAppThemes(): void {
+        ghosttyThemeProc.running = true;
+        firefoxThemeProc.running = true;
+        openchamberThemeProc.running = true;
+    }
+
+    Process {
         id: samplerProc
 
         stdout: SplitParser {
@@ -87,7 +108,7 @@ Singleton {
         const n = Math.floor(bytes.length / 3);
         if (n < 4) {
             Theme.reset();
-            ghosttyThemeProc.running = true;
+            root.syncAppThemes();
             return;
         }
         let tr = 0;
@@ -154,7 +175,7 @@ Singleton {
             "accentH": best ? best.h : nh,
             "accentS": best ? best.s : 0
         });
-        ghosttyThemeProc.running = true;
+        root.syncAppThemes();
     }
 
     function sample(path: string): void {

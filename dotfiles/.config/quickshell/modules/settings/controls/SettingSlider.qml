@@ -73,7 +73,7 @@ Item {
             anchors.verticalCenter: track.verticalCenter
             width: track.width * root.ratio
             height: track.height
-            color: Theme.inverseBg
+            color: Theme.highlight
         }
 
         Rectangle {

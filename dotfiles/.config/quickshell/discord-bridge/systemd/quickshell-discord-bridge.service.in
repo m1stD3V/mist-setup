@@ -1,0 +1,9 @@
+[Unit]
+Description=Re-patch Discord with the Equicord DiscordBridge userplugin after updates
+Documentation=file://@BRIDGE_DIR@/auto-repair.sh
+
+[Service]
+Type=oneshot
+ExecStart="@BRIDGE_DIR@/auto-repair.sh"
+Nice=10
+TimeoutStartSec=900

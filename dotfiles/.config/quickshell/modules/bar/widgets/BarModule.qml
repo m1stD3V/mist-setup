@@ -12,7 +12,7 @@ Rectangle {
     implicitHeight: Theme.barHeight - 10
     color: "transparent"
     border.width: 1
-    border.color: hover.hovered ? Theme.inverseBg : Theme.borderHigh
+    border.color: hover.hovered ? Theme.highlight : Theme.borderHigh
 
     HoverHandler {
         id: hover

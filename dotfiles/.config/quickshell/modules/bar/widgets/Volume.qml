@@ -15,9 +15,9 @@ Rectangle {
 
     implicitWidth: btnRow.implicitWidth + 10
     implicitHeight: Theme.barHeight - 10
-    color: btnArea.containsMouse || popup.open ? Theme.inverseBg : "transparent"
+    color: btnArea.containsMouse || popup.open ? Theme.highlight : "transparent"
     border.width: 1
-    border.color: btnArea.containsMouse || popup.open ? Theme.inverseBg : Theme.borderHigh
+    border.color: btnArea.containsMouse || popup.open ? Theme.highlight : Theme.borderHigh
 
     Row {
         id: btnRow

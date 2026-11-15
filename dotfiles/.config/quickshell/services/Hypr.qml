@@ -11,12 +11,31 @@ Singleton {
     readonly property var workspaces: Hyprland.workspaces
     readonly property var monitors: Hyprland.monitors
 
-    readonly property var activeToplevel: Hyprland.activeToplevel ?? focusedToplevel
+    // Hyprland posts "activewindowv2" with an empty address when a workspace
+    // runs out of windows, but quickshell cannot parse the empty payload and
+    // drops the event, so Hyprland.activeToplevel keeps pointing at the window
+    // that was focused before the switch. Reject it once it no longer lives on
+    // the focused workspace and fall back to that workspace's own last focused
+    // window, which is what the bar should show after switching to an empty
+    // workspace (nothing) instead of the application that was left behind.
+    readonly property var activeToplevel: {
+        const workspace = focusedWorkspace;
+        const active = Hyprland.activeToplevel;
+        if (!workspace)
+            return active;
+        if (isOnWorkspace(active, workspace))
+            return active;
+        return focusedToplevel;
+    }
     readonly property var focusedToplevel: {
-        const tops = Hyprland.toplevels?.values ?? [];
-        for (const t of tops) {
-            const obj = t?.lastIpcObject;
-            if (obj && obj.focusHistoryID === 0 && obj.mapped !== false && obj.hidden !== true)
+        const workspace = focusedWorkspace;
+        if (!workspace)
+            return null;
+        const lastAddress = String(workspace.lastIpcObject?.lastwindow ?? "");
+        if (lastAddress.length === 0)
+            return null;
+        for (const t of (workspace.toplevels?.values ?? [])) {
+            if (addressOf(t) === lastAddress)
                 return t;
         }
         return null;
@@ -51,6 +70,17 @@ Singleton {
 
     function workspaceNameOf(win: var): string {
         return String(win?.lastIpcObject?.workspace?.name ?? win?.workspace?.name ?? "");
+    }
+
+    function isOnWorkspace(win: var, workspace: var): bool {
+        if (!win || !workspace)
+            return false;
+        // Prefer the live workspace link over lastIpcObject, which stays stale
+        // until the toplevel list is refreshed after a move.
+        const winWorkspace = win.workspace ?? win.lastIpcObject?.workspace;
+        if (!winWorkspace)
+            return false;
+        return String(winWorkspace.name ?? "") === String(workspace.name ?? "");
     }
 
     function isMinimized(win: var): bool {

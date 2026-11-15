@@ -15,13 +15,14 @@ Rectangle {
 
     function closePopup(): void {
         popup.open = false;
+        networkPopup.open = false;
     }
 
     implicitWidth: labelText.implicitWidth + 10
     implicitHeight: Theme.barHeight - 10
-    color: hover.hovered || popup.open ? Theme.inverseBg : "transparent"
+    color: hover.hovered || popup.open || networkPopup.open ? Theme.highlight : "transparent"
     border.width: 1
-    border.color: hover.hovered || popup.open ? Theme.inverseBg : Theme.borderHigh
+    border.color: hover.hovered || popup.open || networkPopup.open ? Theme.highlight : Theme.borderHigh
 
     HoverHandler {
         id: hover
@@ -31,7 +32,10 @@ Rectangle {
         onPressedChanged: if (pressed)
             ShellState.popupClickGuard = true
 
-        onTapped: popup.open = !popup.open
+        onTapped: {
+            networkPopup.open = false;
+            popup.open = !popup.open;
+        }
     }
 
     RText {
@@ -39,7 +43,7 @@ Rectangle {
 
         anchors.centerIn: parent
         text: "MENU"
-        color: hover.hovered || popup.open ? Theme.inverseText : Theme.text
+        color: hover.hovered || popup.open || networkPopup.open ? Theme.inverseText : Theme.text
         font.pixelSize: Theme.fontExtraSmall + 2
     }
 
@@ -48,22 +52,22 @@ Rectangle {
 
         function onWallpaperOpenChanged(): void {
             if (ShellState.wallpaperOpen)
-                popup.open = false;
+                root.closePopup();
         }
 
         function onSessionOpenChanged(): void {
             if (ShellState.sessionOpen)
-                popup.open = false;
+                root.closePopup();
         }
 
         function onAppsOpenChanged(): void {
             if (ShellState.appsOpen)
-                popup.open = false;
+                root.closePopup();
         }
 
         function onSettingsOpenChanged(): void {
             if (ShellState.settingsOpen)
-                popup.open = false;
+                root.closePopup();
         }
     }
 
@@ -74,13 +78,23 @@ Rectangle {
         screenEdge: "left"
         title: "SYSTEM"
         contentWidth: Theme.popupWidth
-        contentHeight: 5 * Theme.popupRowHeight + 4 * Theme.popupRowSpacing + Theme.popupChromeHeight
+        contentHeight: 6 * Theme.popupRowHeight + 5 * Theme.popupRowSpacing + Theme.popupChromeHeight
         open: false
 
         content: Component {
             Column {
                 anchors.fill: parent
                 spacing: 4
+
+                MenuAction {
+                    width: parent.width
+                    label: "NETWORK"
+                    hint: Network.menuHint
+                    onClicked: {
+                        popup.open = false;
+                        networkPopup.open = true;
+                    }
+                }
 
                 MenuAction {
                     width: parent.width
@@ -121,5 +135,11 @@ Rectangle {
                 }
             }
         }
+    }
+
+    NetworkPanel {
+        id: networkPopup
+
+        barWindow: root.window
     }
 }

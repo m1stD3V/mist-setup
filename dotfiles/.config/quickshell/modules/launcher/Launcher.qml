@@ -163,7 +163,7 @@ PanelWindow {
 
                         width: list.width
                         height: 27
-                        color: selected ? Theme.inverseBg : (mouse.hovered ? Theme.surfaceHigh : "transparent")
+                        color: selected ? Theme.highlight : (mouse.hovered ? Theme.surfaceHigh : "transparent")
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter

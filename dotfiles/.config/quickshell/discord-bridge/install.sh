@@ -2,12 +2,10 @@
 # Builds Equicord with the DiscordBridge userplugin and injects it into the
 # local Discord install. Re-run this after a Discord update if the widget
 # stops reporting state.
-#
-# WARNING: this builds and injects a third-party client mod into Discord.
-# Client mods can violate Discord's Terms of Service; use at your own risk.
 set -euo pipefail
 
-PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/plugin" && pwd)"
+BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$BRIDGE_DIR/plugin"
 SRC_DIR="${EQUICORD_DIR:-$HOME/.local/share/equicord}"
 DISCORD_DIR="${DISCORD_DIR:-$HOME/.config/discord}"
 
@@ -49,6 +47,18 @@ $PM --dir "$SRC_DIR" build
 echo "==> injecting into $DISCORD_DIR"
 node "$SRC_DIR/scripts/runInstaller.mjs" -- --install --location "$DISCORD_DIR"
 
+AUTO_REPAIR="${INSTALL_AUTO_REPAIR:-1}"
+if [ "$AUTO_REPAIR" = "1" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    echo "==> installing auto-repair for Discord updates"
+    if ! "$BRIDGE_DIR/setup-auto-repair.sh"; then
+        echo "warning: could not install the auto-repair service." >&2
+        echo "         run $BRIDGE_DIR/setup-auto-repair.sh manually." >&2
+    fi
+fi
+
 echo
 echo "Done. Restart Discord to load DiscordBridge."
 echo "Then enable it under Settings > Equicord > Plugins > DiscordBridge."
+if [ "$AUTO_REPAIR" = "1" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    echo "Discord updates will be re-patched automatically."
+fi

@@ -9,6 +9,7 @@ Arch Linux installation with a bootloader and can log in.
 
 - Hyprland, Quickshell, Ghostty, Qt Wayland, portals
 - PipeWire, WirePlumber, NetworkManager, Bluetooth
+- power-profiles-daemon for the bar's battery and power profile popup
 - zsh, Oh My Zsh, Powerlevel10k, MesloLGS NF fonts
 - eza with Nerd Font file icons (`ls`, `l`, `ll`, `la`, `lt`, `tree`)
 - The icons-in-terminal glyph font plus its fontconfig fallback rule
@@ -56,6 +57,7 @@ Common options:
 ./install.sh --dry-run          # show what would happen
 ./install.sh --yes              # accept defaults
 ./install.sh --full             # include optional apps, AUR, OpenCode
+./install.sh --discord-bridge   # patch Discord with the bar's bridge plugin
 ./install.sh --no-nvim          # skip Neovim plugin bootstrap
 ./install.sh --no-dotfiles      # packages only
 ```
@@ -76,6 +78,11 @@ dotfiles/                  User configuration (bundled assets credited in CREDIT
 system/                    System-level configuration (zram)
 scripts/nvim-mason.lua     Neovim LSP/tool bootstrap
 ```
+
+Inside the deployed tree, `~/.config/quickshell/` carries the bar, panels and
+services, `scripts/` (wallpaper analysis for Firefox and OpenChamber) and
+`discord-bridge/` (optional plugin, its installer and the update auto-repair
+units).
 
 ## Dotfiles included
 
@@ -114,6 +121,13 @@ The deployed config avoids machine-specific values:
   oh-my-zsh `ls` alias is kept.
 - GPU/CPU packages are detected during install (`install.sh`), and the battery
   widget hides itself on machines without a battery.
+- Wired and Wi-Fi devices come from NetworkManager at runtime, so the network
+  panel reflects whatever hardware exists; it reports "no network backend" when
+  Quickshell cannot reach NetworkManager.
+- Power profiles come from `power-profiles-daemon`; machines or kernels without
+  it show "power profiles unavailable" instead of a broken list.
+- The Discord widget polls for the `Discord` process and starts
+  `/usr/bin/discord`, so it works whether or not the bridge plugin is injected.
 
 ## After install
 
@@ -131,15 +145,53 @@ The deployed config avoids machine-specific values:
    p10k configure
    ```
 5. Open Neovim once to finish any remaining LSP/tool installs.
+6. Start Firefox once; its generated chrome styles apply at startup. OpenChamber
+   picks up the generated theme on its next start.
 
 ## Notes
 
 - `quickshell` renders the wallpaper itself; `awww` is not installed.
-- The Ghostty theme is generated from the current wallpaper by
-  `~/.config/ghostty/sync-theme.py`.
-- `--full` installs optional apps from `packages/apps.txt` and AUR packages from
-  `packages/aur.txt`.
+- Themes are generated from the current wallpaper. `Wallpapers.qml` runs three
+  scripts whenever the wallpaper changes, and `install.sh` runs the same ones
+  after deploying dotfiles:
+  - `~/.config/ghostty/sync-theme.py` writes the Ghostty palette
+  - `~/.config/quickshell/scripts/sync-firefox-theme.py` writes
+    `userChrome.css`, `userContent.css` and a managed block in `user.js` of the
+    default Firefox profile (visible on the next Firefox start)
+  - `~/.config/quickshell/scripts/sync-openchamber-theme.py` writes
+    `~/.config/openchamber/themes/openchamber-dark.json` (reloaded live)
+- The shell palette carries a fixed highlight (`#f72585`) for hover, selection
+  and active states; everything else follows the wallpaper.
+- The overflow menu's **Network** entry lists Wi-Fi networks and wired devices
+  through NetworkManager: click to connect or disconnect, right-click a saved
+  network to forget it, and type the password for a new secured network inline.
+- The battery widget opens a power profile picker backed by
+  `power-profiles-daemon`; it reports "unavailable" on hardware without it.
+- The Discord widget can start, focus and kill the Discord app, and the bridge
+  state is shown next to it. `--full` installs optional apps from
+  `packages/apps.txt` and AUR packages from `packages/aur.txt`, then enables
+  the cups printing stack and firewalld.
 - OpenCode is installed only with `--full` or `--opencode`.
+
+### Discord bridge (optional, client mod)
+
+The Discord bar widget shows voice-call state through a small plugin that is
+injected into the Discord desktop app. That is a client mod and may conflict
+with Discord's Terms of Service; install it deliberately:
+
+```sh
+./install.sh --discord-bridge
+```
+
+`dotfiles/.config/quickshell/discord-bridge/install.sh` clones and builds
+Equicord, copies `plugin/` into it and injects the result into
+`~/.config/discord`. It then installs the `quickshell-discord-bridge.path` and
+`.service` user units, whose `auto-repair.sh` re-patches the app after every
+Discord update and restarts it when no call is active. Logs go to
+`~/.local/state/mist/discord-bridge.log`; re-run
+`setup-auto-repair.sh` if the units are lost. Without the bridge, the widget
+still starts and stops Discord and shows no call information.
+
 - The bundled `icons-in-terminal.ttf` comes from
   [sebastiencs/icons-in-terminal](https://github.com/sebastiencs/icons-in-terminal)
   and is MIT licensed; see [`CREDITS.md`](CREDITS.md) for the notice.

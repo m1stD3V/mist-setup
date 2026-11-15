@@ -22,6 +22,9 @@ Singleton {
     property color inverseText: "#0d0d0d"
     property color accent: "#e6e6e6"
     property color accentDim: "#565656"
+    // fixed highlight for interactive states (hover/active/selected);
+    // unlike inverseBg this is not rethemed from the wallpaper
+    property color highlight: "#f72585"
     // translucent tint for the bar, recomputed from the wallpaper;
     // barOpacity is adjustable from Settings
     property real barOpacity: 0.78

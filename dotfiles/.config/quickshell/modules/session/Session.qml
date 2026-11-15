@@ -86,9 +86,9 @@ PanelWindow {
 
                     width: parent.width
                     height: 34
-                    color: selected ? Theme.inverseBg : Theme.bg
+                    color: selected ? Theme.highlight : Theme.bg
                     border.width: 1
-                    border.color: selected ? Theme.inverseBg : Theme.border
+                    border.color: selected ? Theme.highlight : Theme.border
 
                     RText {
                         anchors.centerIn: parent

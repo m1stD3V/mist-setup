@@ -14,7 +14,7 @@ Rectangle {
     signal clicked
 
     implicitHeight: 28
-    color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.inverseBg) : "transparent"
+    color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.highlight) : "transparent"
     border.width: 0
 
     HoverHandler {

@@ -28,9 +28,9 @@ Rectangle {
 
     implicitWidth: timeRow.implicitWidth + 14
     implicitHeight: Theme.barHeight - 10
-    color: hot ? Theme.inverseBg : "transparent"
+    color: hot ? Theme.highlight : "transparent"
     border.width: 1
-    border.color: hot ? Theme.inverseBg : Theme.borderHigh
+    border.color: hot ? Theme.highlight : Theme.borderHigh
 
     HoverHandler {
         id: hover
