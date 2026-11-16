@@ -109,6 +109,32 @@ It works in three steps:
 is useful when the repository is the source of truth for local changes. After a
 dotfile update, reload the desktop (`hyprctl reload`, or log out and back in).
 
+## Multiple users
+
+The per-user half of the setup (dotfiles, shell, fonts, themes, Neovim,
+OpenCode) can be applied to more than one account on the same machine. The
+system half — packages, services, `/etc` files — still runs exactly once.
+
+```sh
+./install.sh                        # the invoking user (or SUDO_USER under sudo)
+sudo ./install.sh --user alice      # one other account
+sudo ./install.sh --all-users       # every human account (UID 1000-59999, shell)
+```
+
+`--all-users` and `--user` with a name other than your own need root, because
+they write into other homes; a plain `sudo ./install.sh` keeps targeting
+`SUDO_USER` rather than root. When it runs as root, the installer drops to the
+target account for everything that generates files (Oh My Zsh, Powerlevel10k,
+fonts, Neovim data, OpenCode, theme scripts) and `chown`s every deployed file,
+so nothing in a home directory ends up root-owned. AUR packages are still
+built as the invoking user, since `makepkg` refuses root.
+
+Each account keeps its own deploy record at
+`~/.local/state/mist/deployed.tsv` and its own theme/wallpaper state in
+`~/.local/state/mist/`. Two users therefore never overwrite each other's local
+edits or see each other's drift, and `--update --all-users` reports and applies
+changes per account.
+
 ## Repository layout
 
 ```text
@@ -124,7 +150,17 @@ packages/aur.txt           Optional AUR applications
 dotfiles/                  User configuration (bundled assets credited in CREDITS.md)
 system/                    System-level configuration (zram)
 scripts/nvim-mason.lua     Neovim LSP/tool bootstrap
+scripts/check-quickshell.sh  QML syntax check for the bundled Quickshell config
 ```
+
+`scripts/check-quickshell.sh [path] [--run]` parses every `.qml` file with the
+Qt6 `qmllint` and only fails on real syntax errors, which matters because the
+`qs.*` imports have no `qmldir` and produce noise otherwise. `--run` also
+starts the shell for a few seconds and fails on runtime QML errors. The
+installer runs the parse check automatically after it deploys a changed
+Quickshell tree (a warning, never a hard failure) so a broken config is caught
+before it leaves someone without a bar.
+
 
 Inside the deployed tree, `~/.config/quickshell/` carries the bar, panels and
 services, `scripts/` (wallpaper analysis for Firefox and OpenChamber) and

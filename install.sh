@@ -3,12 +3,32 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# When run through sudo for --all-users, git would reject a checkout owned by
+# the invoking user. Mark this repo safe for this process only.
+if ((EUID == 0)) && [[ -n "${SUDO_USER:-}" ]]; then
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0="safe.directory"
+  export GIT_CONFIG_VALUE_0="$ROOT_DIR"
+fi
 DOTFILES_DIR="$ROOT_DIR/dotfiles"
 PACKAGES_DIR="$ROOT_DIR/packages"
 SYSTEM_DIR="$ROOT_DIR/system"
 
+# Which accounts receive the per-user half of the setup (dotfiles, shell,
+# fonts, themes, Neovim, OpenCode). The system half (packages, services,
+# /etc files) always runs once, whoever the targets are.
+#   default      the invoking user (or SUDO_USER under sudo)
+#   --user NAME  that one account
+#   --all-users  every human account on the machine (needs root)
+USER_OPT=""
+ALL_USERS=0
 TARGET_USER="${SUDO_USER:-$USER}"
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+TARGET_UID="$(id -u "$TARGET_USER" 2>/dev/null || printf '0')"
+TARGET_GID="$(id -g "$TARGET_USER" 2>/dev/null || printf '0')"
+TARGET_USERS=()
+# Unprivileged account used to build AUR packages; makepkg refuses root.
+BUILD_USER="${SUDO_USER:-$USER}"
 
 ASSUME_YES=0
 DRY_RUN=0
@@ -29,6 +49,8 @@ KEEP_LOCAL=0
 SHOW_DIFF=0
 ORIGINAL_ARGS=()
 
+# Recomputed by set_target_user() for every account in TARGET_USERS, so each
+# user keeps an independent deploy record.
 MIST_STATE_DIR="$TARGET_HOME/.local/state/mist"
 DEPLOY_MANIFEST="$MIST_STATE_DIR/deployed.tsv"
 
@@ -76,6 +98,13 @@ Usage:
   ./install.sh [options]
   ./install.sh --update [options]
 
+Target accounts:
+      --user NAME    Apply the per-user setup (dotfiles, shell, fonts, themes,
+                     Neovim, OpenCode) to NAME instead of the invoking user
+      --all-users    Apply it to every human account on the machine. Needs
+                     root: sudo ./install.sh --all-users ...
+                     Packages, services and /etc files are still installed once.
+
 Options:
   -y, --yes          Accept defaults without prompting
       --dry-run      Print actions without changing the system
@@ -115,6 +144,13 @@ parse_args() {
     case "$1" in
       -y|--yes) ASSUME_YES=1 ;;
       --dry-run) DRY_RUN=1 ;;
+      --user)
+        shift
+        (($#)) || die "--user needs an account name"
+        USER_OPT="$1"
+        ;;
+      --user=*) USER_OPT="${1#--user=}" ;;
+      --all-users) ALL_USERS=1 ;;
       --update) UPDATE_MODE=1 ;;
       --check)
         UPDATE_MODE=1
@@ -211,10 +247,135 @@ require_arch() {
 }
 
 check_user() {
-  [[ $EUID -ne 0 ]] || die "Run this script as a normal user, not as root"
   command -v sudo >/dev/null || die "sudo is required"
+  if ((EUID == 0)); then
+    # sudo keeps SUDO_USER, so a plain `sudo ./install.sh` still targets the
+    # invoking account. A root login has no such hint and must name a target.
+    if [[ -z "${SUDO_USER:-}" ]] && ((!ALL_USERS)) && [[ -z "$USER_OPT" ]]; then
+      die "Running as root: pass --user NAME or --all-users"
+    fi
+    command -v runuser >/dev/null || die "runuser (util-linux) is required for --user/--all-users"
+    return 0
+  fi
+  if ((ALL_USERS)); then
+    die "--all-users changes other users' homes; run it with sudo"
+  fi
+  if [[ -n "$USER_OPT" && "$USER_OPT" != "$USER" ]]; then
+    die "--user $USER_OPT needs root: sudo ./install.sh --user $USER_OPT"
+  fi
   [[ -n "$TARGET_HOME" && -d "$TARGET_HOME" ]] || die "Cannot determine home directory for $TARGET_USER"
   [[ "$TARGET_HOME" != "/" ]] || die "Refusing to deploy dotfiles to /"
+}
+
+user_home() { getent passwd "$1" | cut -d: -f6; }
+
+# Human accounts that can log in and own a home directory. System accounts
+# (UID below 1000), the nobody range and nologin shells are excluded.
+human_users() {
+  local name _ uid _ _ home shell
+  while IFS=: read -r name _ uid _ _ home shell; do
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]] || continue
+    ((uid >= 1000 && uid < 60000)) || continue
+    [[ -n "$home" && -d "$home" ]] || continue
+    case "$shell" in
+      */nologin | */false) continue ;;
+    esac
+    printf '%s\n' "$name"
+  done </etc/passwd
+}
+
+# Point every per-user global at one account. The manifest and state directory
+# follow the home, so two users never share a deploy record.
+set_target_user() {
+  TARGET_USER="$1"
+  TARGET_HOME="$(user_home "$TARGET_USER")"
+  TARGET_UID="$(id -u "$TARGET_USER")"
+  TARGET_GID="$(id -g "$TARGET_USER")"
+  MIST_STATE_DIR="$TARGET_HOME/.local/state/mist"
+  DEPLOY_MANIFEST="$MIST_STATE_DIR/deployed.tsv"
+  MANIFEST=()
+  COLLECTED=()
+}
+
+resolve_targets() {
+  if ((ALL_USERS)); then
+    mapfile -t TARGET_USERS < <(human_users)
+    ((${#TARGET_USERS[@]})) || die "No human user accounts found"
+  elif [[ -n "$USER_OPT" ]]; then
+    getent passwd "$USER_OPT" >/dev/null || die "No such user: $USER_OPT"
+    TARGET_USERS=("$USER_OPT")
+  else
+    getent passwd "$TARGET_USER" >/dev/null || die "Cannot resolve user $TARGET_USER"
+    TARGET_USERS=("$TARGET_USER")
+  fi
+  set_target_user "${TARGET_USERS[0]}"
+  [[ -n "$TARGET_HOME" && -d "$TARGET_HOME" ]] || die "Cannot determine home directory for $TARGET_USER"
+  [[ "$TARGET_HOME" != "/" ]] || die "Refusing to deploy dotfiles to /"
+}
+
+# Run a command in the target account's environment. When the installer runs
+# as root (--user/--all-users), it drops to the account so generated files
+# (Neovim data, OpenCode, Oh My Zsh, themes) are never root-owned.
+as_user() {
+  if ((DRY_RUN)); then
+    printf '[dry-run]'
+    printf ' %q' "$@"
+    printf '\n'
+    return 0
+  fi
+  local -a env_args=(
+    "HOME=$TARGET_HOME"
+    "XDG_CONFIG_HOME=$TARGET_HOME/.config"
+    "XDG_DATA_HOME=$TARGET_HOME/.local/share"
+    "XDG_STATE_HOME=$TARGET_HOME/.local/state"
+    "XDG_CACHE_HOME=$TARGET_HOME/.cache"
+    "XDG_RUNTIME_DIR=/run/user/$TARGET_UID"
+  )
+  if ((EUID == 0)) && [[ "$TARGET_USER" != "root" ]]; then
+    runuser -u "$TARGET_USER" -- env "${env_args[@]}" "$@"
+  else
+    env "${env_args[@]}" "$@"
+  fi
+}
+
+# Run a package build as the unprivileged account when the installer itself is
+# root, because makepkg/yay refuse to run as root.
+run_build() {
+  if ((DRY_RUN)); then
+    printf '[dry-run]'
+    printf ' %q' "$@"
+    printf '\n'
+    return 0
+  fi
+  if ((EUID == 0)); then
+    [[ "$BUILD_USER" != "root" ]] ||
+      die "Cannot build packages as root; run with sudo from a normal account"
+    runuser -u "$BUILD_USER" -- "$@"
+  else
+    "$@"
+  fi
+}
+
+# Give a deployed path back to its account when the installer runs as root.
+own_path() {
+  ((EUID == 0)) || return 0
+  [[ -e "$1" || -L "$1" ]] || return 0
+  chown -h "$TARGET_UID:$TARGET_GID" "$1"
+}
+
+# mkdir -p that hands ownership of every directory it creates to the target
+# user, so the next non-root run can write there.
+make_parent() {
+  local dest="$1" dir
+  dir="$(dirname "$dest")"
+  local -a created=()
+  while [[ ! -d "$dir" ]]; do
+    created=("$dir" "${created[@]}")
+    dir="$(dirname "$dir")"
+  done
+  mkdir -p "$(dirname "$dest")"
+  local d
+  for d in "${created[@]}"; do own_path "$d"; done
 }
 
 detect_cpu_package() {
@@ -275,14 +436,19 @@ install_yay() {
   log "Installing yay-bin from the AUR"
   local tmp
   tmp="$(mktemp -d)"
-  run git clone --depth=1 https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin"
+  # makepkg and yay refuse to run as root. When the installer runs as root for
+  # --all-users, build as the invoking user instead.
+  if ((EUID == 0)) && [[ "$BUILD_USER" != "root" ]]; then
+    chown "$BUILD_USER" "$tmp"
+  fi
+  run_build git clone --depth=1 https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin"
   if ((DRY_RUN)); then
     rm -rf "$tmp"
     return 0
   fi
   (
     cd "$tmp/yay-bin"
-    makepkg -si --noconfirm
+    run_build makepkg -si --noconfirm
   )
   rm -rf "$tmp"
 }
@@ -307,8 +473,9 @@ install_pacseek() {
     warn "Failed to download the pacseek installer; skipping"
     return 0
   fi
+  chmod 644 "$pacseek_installer"
   # User install: the launcher and ~/.zshrc both add ~/.local/bin to PATH.
-  HOME="$TARGET_HOME" sh "$pacseek_installer" || warn "pacseek install failed"
+  as_user sh "$pacseek_installer" || warn "pacseek install failed"
   rm -f "$pacseek_installer"
 }
 
@@ -320,11 +487,7 @@ install_aur_packages() {
   ((${#pkgs[@]})) || return 0
   local IFS=' '
   log "Installing AUR packages: ${pkgs[*]}"
-  if ((DRY_RUN)); then
-    run yay -S --needed --noconfirm "${pkgs[@]}"
-  else
-    yay -S --needed --noconfirm "${pkgs[@]}"
-  fi
+  run_build yay -S --needed --noconfirm "${pkgs[@]}"
 }
 
 install_omz() {
@@ -346,7 +509,8 @@ install_omz() {
     rm -f "$omz_installer"
     die "Failed to download the Oh My Zsh installer"
   fi
-  HOME="$TARGET_HOME" RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh "$omz_installer"
+  chmod 644 "$omz_installer"
+  as_user env RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh "$omz_installer"
   rm -f "$omz_installer"
 }
 
@@ -357,7 +521,7 @@ install_p10k() {
     return 0
   fi
   log "Installing Powerlevel10k"
-  run git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$theme_dir"
+  as_user git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$theme_dir"
 }
 
 install_fonts() {
@@ -369,10 +533,10 @@ install_fonts() {
     log "[dry-run] download MesloLGS NF fonts into $font_dir"
     return 0
   fi
-  mkdir -p "$font_dir"
+  make_parent "$font_dir/."
   local i
   for i in "${!url_names[@]}"; do
-    curl --proto '=https' --tlsv1.2 -fL --retry 3 -o "$font_dir/MesloLGS NF ${file_names[$i]}.ttf" \
+    as_user curl --proto '=https' --tlsv1.2 -fL --retry 3 -o "$font_dir/MesloLGS NF ${file_names[$i]}.ttf" \
       "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20${url_names[$i]}.ttf"
   done
 }
@@ -386,7 +550,7 @@ refresh_font_cache() {
   fi
   # Target the deployed user's cache even if the script ran with a different
   # HOME; includes both MesloLGS NF and the bundled icons-in-terminal font.
-  HOME="$TARGET_HOME" fc-cache -f >/dev/null
+  as_user fc-cache -f >/dev/null
 }
 
 hash_file() {
@@ -408,7 +572,7 @@ load_manifest() {
 
 save_manifest() {
   ((DRY_RUN)) && return 0
-  mkdir -p "$MIST_STATE_DIR"
+  make_parent "$MIST_STATE_DIR/."
   local rel
   {
     for rel in "${!MANIFEST[@]}"; do
@@ -416,6 +580,7 @@ save_manifest() {
     done | sort -k2
   } >"$DEPLOY_MANIFEST.tmp"
   mv "$DEPLOY_MANIFEST.tmp" "$DEPLOY_MANIFEST"
+  own_path "$DEPLOY_MANIFEST"
 }
 
 # True when the deployed file matches a revision this repo shipped before, which
@@ -590,6 +755,16 @@ report_dotfile_plan() {
   done
 }
 
+# Copy a repo file into a user's home and hand it to that user. Used for every
+# dotfile write so --user/--all-users can run as root without leaving
+# root-owned files behind.
+deploy_copy() {
+  local src="$1" dest="$2"
+  make_parent "$dest"
+  cp -a "$src" "$dest"
+  own_path "$dest"
+}
+
 backup_file() {
   local dest="$1" stamp="$2" backup="$1.pre-mist-$2" n=1
   while [[ -e "$backup" ]]; do
@@ -597,6 +772,7 @@ backup_file() {
     n=$((n + 1))
   done
   cp -a "$dest" "$backup"
+  own_path "$backup"
   printf '%s\n' "$backup"
 }
 
@@ -608,8 +784,7 @@ apply_dotfile_plan() {
   for rel in "${PLAN_ADD[@]}"; do
     src="$DOTFILES_DIR/$rel"
     dest="$TARGET_HOME/$rel"
-    mkdir -p "$(dirname "$dest")"
-    cp -a "$src" "$dest"
+    deploy_copy "$src" "$dest"
     rm -f "$dest.mist-new"
     MANIFEST["$rel"]="$(hash_file "$src")"
     added=$((added + 1))
@@ -619,7 +794,7 @@ apply_dotfile_plan() {
     src="$DOTFILES_DIR/$rel"
     dest="$TARGET_HOME/$rel"
     backup="$(backup_file "$dest" "$stamp")"
-    cp -a "$src" "$dest"
+    deploy_copy "$src" "$dest"
     rm -f "$dest.mist-new"
     MANIFEST["$rel"]="$(hash_file "$src")"
     updated=$((updated + 1))
@@ -630,11 +805,11 @@ apply_dotfile_plan() {
     src="$DOTFILES_DIR/$rel"
     dest="$TARGET_HOME/$rel"
     if ((KEEP_LOCAL)); then
-      cp -a "$src" "$dest.mist-new"
+      deploy_copy "$src" "$dest.mist-new"
       kept_legacy=$((kept_legacy + 1))
     else
       backup="$(backup_file "$dest" "$stamp")"
-      cp -a "$src" "$dest"
+      deploy_copy "$src" "$dest"
       rm -f "$dest.mist-new"
       MANIFEST["$rel"]="$(hash_file "$src")"
       updated=$((updated + 1))
@@ -647,13 +822,13 @@ apply_dotfile_plan() {
     dest="$TARGET_HOME/$rel"
     if ((FORCE_DOTFILES)); then
       backup="$(backup_file "$dest" "$stamp")"
-      cp -a "$src" "$dest"
+      deploy_copy "$src" "$dest"
       rm -f "$dest.mist-new"
       MANIFEST["$rel"]="$(hash_file "$src")"
       replaced=$((replaced + 1))
       printf '  backup %s\n' "$backup"
     else
-      cp -a "$src" "$dest.mist-new"
+      deploy_copy "$src" "$dest.mist-new"
       kept_conflicts=$((kept_conflicts + 1))
     fi
   done
@@ -672,8 +847,7 @@ apply_dotfile_plan() {
   for rel in "${PLAN_GENERATED[@]}"; do
     dest="$TARGET_HOME/$rel"
     [[ -e "$dest" ]] && continue
-    mkdir -p "$(dirname "$dest")"
-    cp -a "$DOTFILES_DIR/$rel" "$dest"
+    deploy_copy "$DOTFILES_DIR/$rel" "$dest"
     printf '  seed     ~/%s\n' "$rel"
   done
 
@@ -768,13 +942,14 @@ setup_theme() {
     return 0
   fi
 
-  mkdir -p "$state_dir"
+  make_parent "$state_dir/."
   wallpaper="$(find "$TARGET_HOME/.config/wallpaper" -maxdepth 1 -type f \
     \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' -o -iname '*.mp4' -o -iname '*.webm' \) \
     | sort | head -n1 || true)"
 
   if [[ -n "$wallpaper" ]]; then
     printf '%s\n' "$wallpaper" >"$state_dir/wallpaper"
+    own_path "$state_dir/wallpaper"
   fi
 
   if ! command -v python3 >/dev/null; then
@@ -787,13 +962,13 @@ setup_theme() {
   local script
   for script in "${theme_scripts[@]}"; do
     [[ -f "$script" ]] || continue
-    HOME="$TARGET_HOME" python3 "$script" || warn "Failed to generate $(basename "$script") output"
+    as_user python3 "$script" || warn "Failed to generate $(basename "$script") output"
   done
 }
 
 install_opencode() {
   ((INSTALL_OPENCODE)) || return 0
-  if command -v opencode >/dev/null; then
+  if [[ -x "$TARGET_HOME/.opencode/bin/opencode" ]] || command -v opencode >/dev/null; then
     ok "OpenCode already installed"
     return 0
   fi
@@ -807,7 +982,8 @@ install_opencode() {
   # Download first so the remote script is visible on disk and the transfer is
   # forced over HTTPS. It is still third-party code.
   if curl --proto '=https' --tlsv1.2 -fsSL -o "$oc_installer" https://opencode.ai/install; then
-    HOME="$TARGET_HOME" bash "$oc_installer" || warn "OpenCode install failed"
+    chmod 644 "$oc_installer"
+    as_user bash "$oc_installer" || warn "OpenCode install failed"
   else
     warn "OpenCode download failed"
   fi
@@ -835,12 +1011,7 @@ install_discord_bridge() {
   fi
 
   log "Patching Discord with the Quickshell DiscordBridge plugin (client mod)"
-  HOME="$TARGET_HOME" \
-    XDG_CONFIG_HOME="$TARGET_HOME/.config" \
-    XDG_DATA_HOME="$TARGET_HOME/.local/share" \
-    XDG_STATE_HOME="$TARGET_HOME/.local/state" \
-    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u "$TARGET_USER")}" \
-    bash "$bridge_script" || warn "DiscordBridge install failed; see its output above"
+  as_user bash "$bridge_script" || warn "DiscordBridge install failed; see its output above"
 }
 
 bootstrap_nvim() {
@@ -859,15 +1030,8 @@ bootstrap_nvim() {
     return 0
   fi
 
-  local env_args=(
-    "HOME=$TARGET_HOME"
-    "XDG_CONFIG_HOME=$TARGET_HOME/.config"
-    "XDG_DATA_HOME=$TARGET_HOME/.local/share"
-    "XDG_STATE_HOME=$TARGET_HOME/.local/state"
-  )
-
-  env "${env_args[@]}" nvim --headless "+Lazy! sync" +qa || warn "Neovim plugin sync failed"
-  env "${env_args[@]}" nvim --headless \
+  as_user nvim --headless "+Lazy! sync" +qa || warn "Neovim plugin sync failed"
+  as_user nvim --headless \
     -c "luafile $ROOT_DIR/scripts/nvim-mason.lua" -c qa || warn "Mason bootstrap failed"
 }
 
@@ -1076,28 +1240,40 @@ EOF
   printf '\n'
 }
 
-run_update() {
-  log "Mist update for $TARGET_USER ($TARGET_HOME)"
-  if ((CHECK_ONLY)); then
-    log "Check mode: reporting changes only"
-  elif ((DRY_RUN)); then
-    warn "Dry run enabled; no changes will be made"
-  elif ! confirm "Update Mist packages and dotfiles?"; then
-    die "Aborted"
+# Parse-check the deployed Quickshell config. A broken QML file leaves the user
+# with no bar and no obvious reason, so say so loudly instead of installing it
+# silently. A warning, not a failure: one bad file must not abort an otherwise
+# successful update halfway through.
+check_quickshell() {
+  local script="$ROOT_DIR/scripts/check-quickshell.sh"
+  local target="$TARGET_HOME/.config/quickshell"
+  ((DRY_RUN)) && return 0
+  [[ -f "$script" && -d "$target" ]] || return 0
+  local output
+  if output="$(bash "$script" "$target" 2>&1)"; then
+    ok "Quickshell configuration parses"
+  elif grep -q 'no Qt6 qmllint found' <<<"$output"; then
+    warn "Qt6 qmllint not installed; skipping the Quickshell syntax check"
+  else
+    warn "Quickshell configuration has QML syntax errors:"
+    printf '%s\n' "$output" >&2
+    warn "The bar will start empty until these are fixed."
   fi
+}
 
-  sync_remote
-
-  collect_package_drift
-  report_package_drift
-  install_missing_packages
-  if ((!NO_PACKAGES)); then
-    install_yay
-    install_pacseek
-  fi
+# Per-user half of an update: dotfile drift, then the steps that depend on
+# what actually changed for that account.
+update_user() {
+  set_target_user "$1"
+  log "Dotfiles and user tools for $TARGET_USER ($TARGET_HOME)"
 
   deploy_dotfiles
-  install_system_configs
+  if plan_touched ".config/quickshell/"; then
+    check_quickshell
+  fi
+  if ((!NO_PACKAGES)); then
+    install_pacseek
+  fi
 
   if plan_touched ".local/share/fonts/" || plan_touched ".config/fontconfig/"; then
     refresh_font_cache
@@ -1114,6 +1290,33 @@ run_update() {
   if ((!INSTALL_DISCORD_BRIDGE)) && plan_touched ".config/quickshell/discord-bridge/"; then
     warn "DiscordBridge files changed; rerun with --discord-bridge to rebuild the plugin"
   fi
+}
+
+run_update() {
+  log "Mist update for ${#TARGET_USERS[@]} user(s)"
+  if ((CHECK_ONLY)); then
+    log "Check mode: reporting changes only"
+  elif ((DRY_RUN)); then
+    warn "Dry run enabled; no changes will be made"
+  elif ! confirm "Update Mist packages and dotfiles?"; then
+    die "Aborted"
+  fi
+
+  sync_remote
+
+  collect_package_drift
+  report_package_drift
+  install_missing_packages
+  if ((!NO_PACKAGES)); then
+    install_yay
+  fi
+  # System-wide, once.
+  install_system_configs
+
+  local user
+  for user in "${TARGET_USERS[@]}"; do
+    update_user "$user"
+  done
 
   summary_update
 }
@@ -1137,18 +1340,40 @@ Firefox theme: enabled by the generated profile user.js; restart Firefox.
 EOF
 }
 
+# Per-user half of a fresh install.
+setup_user() {
+  set_target_user "$1"
+  log "Setting up user $TARGET_USER ($TARGET_HOME)"
+
+  install_pacseek
+  install_omz
+  install_p10k
+  install_fonts
+  deploy_dotfiles
+  check_quickshell
+  refresh_font_cache
+  set_shell
+  setup_theme
+  install_opencode
+  install_discord_bridge
+  bootstrap_nvim
+}
+
 main() {
   ORIGINAL_ARGS=("$@")
   parse_args "$@"
   require_arch
   check_user
+  resolve_targets
 
   if ((UPDATE_MODE)); then
     run_update
     return 0
   fi
 
-  log "Mist setup for $TARGET_USER ($TARGET_HOME)"
+  local user_list
+  user_list="$(IFS=,; printf '%s' "${TARGET_USERS[*]}")"
+  log "Mist setup for ${#TARGET_USERS[@]} user(s): $user_list"
   if ((DRY_RUN)); then
     warn "Dry run enabled; no changes will be made"
   elif ! confirm "Install Mist packages and deploy dotfiles?"; then
@@ -1166,7 +1391,6 @@ main() {
 
   # yay backs pacseek's AUR search and the optional AUR package group.
   install_yay
-  install_pacseek
 
   if ((INSTALL_APPS)); then
     install_packages "$PACKAGES_DIR/apps.txt"
@@ -1179,20 +1403,15 @@ main() {
     install_aur_packages
   fi
 
+  # System-wide, once for all targets.
   enable_app_services
-
-  install_omz
-  install_p10k
-  install_fonts
-  deploy_dotfiles
-  refresh_font_cache
   install_system_configs
   enable_services
-  set_shell
-  setup_theme
-  install_opencode
-  install_discord_bridge
-  bootstrap_nvim
+
+  local user
+  for user in "${TARGET_USERS[@]}"; do
+    setup_user "$user"
+  done
 
   summary
 }
