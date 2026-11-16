@@ -9,7 +9,7 @@ Item {
     property string label: ""
     property string value: ""
 
-    implicitHeight: 24
+    implicitHeight: 26
 
     RText {
         anchors.left: parent.left
@@ -18,7 +18,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
         color: Theme.textMuted
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
         elide: Text.ElideRight
     }
 
@@ -29,7 +29,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: root.value
         color: Theme.text
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
         elide: Text.ElideRight
         horizontalAlignment: Text.AlignRight
     }

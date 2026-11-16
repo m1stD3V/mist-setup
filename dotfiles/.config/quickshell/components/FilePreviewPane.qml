@@ -75,7 +75,7 @@ Rectangle {
             height: parent.height - 80
             text: root.preview?.text ?? ""
             color: Theme.text
-            font.pixelSize: Theme.fontExtraSmall
+            font.pixelSize: Theme.fontSmall
             wrapMode: Text.WrapAnywhere
             clip: true
         }
@@ -86,7 +86,7 @@ Rectangle {
             height: parent.height - 80
             text: (root.preview?.entries ?? []).join("\n")
             color: Theme.text
-            font.pixelSize: Theme.fontExtraSmall
+            font.pixelSize: Theme.fontSmall
             wrapMode: Text.WrapAnywhere
             clip: true
         }
@@ -97,7 +97,7 @@ Rectangle {
             height: parent.height - 80
             text: root.preview?.metadata ?? ""
             color: Theme.text
-            font.pixelSize: Theme.fontExtraSmall
+            font.pixelSize: Theme.fontSmall
             wrapMode: Text.WrapAnywhere
             clip: true
         }
@@ -107,7 +107,7 @@ Rectangle {
             width: parent.width
             text: root.preview?.error ?? ""
             color: Theme.textMuted
-            font.pixelSize: Theme.fontExtraSmall
+            font.pixelSize: Theme.fontSmall
             wrapMode: Text.WrapAnywhere
         }
     }

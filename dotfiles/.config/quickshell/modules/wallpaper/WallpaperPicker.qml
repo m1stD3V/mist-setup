@@ -17,9 +17,11 @@ PanelWindow {
 
     readonly property bool showHere: ShellState.wallpaperOpen && Hypr.focusedMonitor?.name === Hypr.monitorFor(modelData)?.name
 
-    // frame is designed for a 1920x1080 logical desktop; shrink proportionally
-    // on smaller screens so the window always fits
-    readonly property real frameScale: Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080))
+    readonly property int frameWidth: 820
+    readonly property int frameHeight: 600
+
+    // shrink only if the frame cannot fit this screen at full size
+    readonly property real frameScale: Theme.fitScale(modelData.width, modelData.height, root.frameWidth, root.frameHeight)
 
     screen: modelData
     visible: showHere
@@ -33,8 +35,8 @@ PanelWindow {
     exclusiveZone: -1
     color: "#b0050505"
     focusable: showHere
-    implicitWidth: 780
-    implicitHeight: 560
+    implicitWidth: root.frameWidth
+    implicitHeight: root.frameHeight
 
     WlrLayershell.layer: WlrLayer.Overlay
 
@@ -48,8 +50,8 @@ PanelWindow {
         id: frame
 
         anchors.centerIn: parent
-        width: 780
-        height: 560
+        width: root.frameWidth
+        height: root.frameHeight
         // transformOrigin defaults to Item.Center, so the scaled frame stays centered
         scale: root.frameScale
         title: "WALLPAPERS"
@@ -94,8 +96,10 @@ PanelWindow {
 
             anchors.fill: parent
             model: folderModel
-            cellWidth: 190
-            cellHeight: 150
+            // spread the cells across the available width so no clipped
+            // half-column is left at the right edge
+            cellWidth: Math.floor(grid.width / Math.max(1, Math.floor(grid.width / 190)))
+            cellHeight: 160
             clip: true
             boundsBehavior: Flickable.StopAtBounds
 
@@ -158,7 +162,7 @@ PanelWindow {
 
                         anchors.centerIn: parent
                         width: parent.width - 12
-                        height: parent.height - 34
+                        height: parent.height - 44
                         source: card.isVideo ? "" : card.fileUrl
                         sourceSize.width: 360
                         sourceSize.height: 240
@@ -189,16 +193,16 @@ PanelWindow {
                         visible: card.isVideo
                         text: "VIDEO"
                         color: card.isSelected ? Theme.textHigh : Theme.textDim
-                        font.pixelSize: Theme.fontExtraSmall + 2
+                        font.pixelSize: Theme.fontSmall
                     }
 
                     RText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 4
+                        anchors.bottomMargin: 8
                         width: parent.width - 12
                         text: card.fileName
-                        font.pixelSize: Theme.fontExtraSmall
+                        font.pixelSize: Theme.fontExtraSmall + 2
                         color: card.isSelected ? Theme.textHigh : Theme.textDim
                         elide: Text.ElideMiddle
                         horizontalAlignment: Text.AlignHCenter

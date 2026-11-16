@@ -22,9 +22,11 @@ PanelWindow {
     }
     readonly property bool showHere: ShellState.settingsOpen && onFocused
 
-    // frame is designed for a 1920x1080 logical desktop; shrink proportionally
-    // on smaller screens so the window always fits
-    readonly property real frameScale: Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080))
+    readonly property int frameWidth: 900
+    readonly property int frameHeight: 600
+
+    // shrink only if the frame cannot fit this screen at full size
+    readonly property real frameScale: Theme.fitScale(modelData.width, modelData.height, root.frameWidth, root.frameHeight)
 
     readonly property var sections: [{
             "id": "bar",
@@ -38,6 +40,12 @@ PanelWindow {
         }, {
             "id": "notifs",
             "label": "NOTIFICATIONS"
+        }, {
+            "id": "lock",
+            "label": "LOCK SCREEN"
+        }, {
+            "id": "keybinds",
+            "label": "KEYBINDS"
         }, {
             "id": "system",
             "label": "SYSTEM"
@@ -56,6 +64,10 @@ PanelWindow {
             return "sections/AudioSection.qml";
         case "notifs":
             return "sections/NotifsSection.qml";
+        case "lock":
+            return "sections/LockSection.qml";
+        case "keybinds":
+            return "sections/KeybindsSection.qml";
         case "system":
             return "sections/SystemSection.qml";
         case "about":
@@ -66,6 +78,8 @@ PanelWindow {
     }
 
     function close(): void {
+        if (Keybinds.recordingId !== "")
+            Keybinds.cancelRecording();
         ShellState.settingsOpen = false;
     }
 
@@ -94,14 +108,24 @@ PanelWindow {
         id: frame
 
         anchors.centerIn: parent
-        width: 860
-        height: 580
+        width: root.frameWidth
+        height: root.frameHeight
         // transformOrigin defaults to Item.Center, so the scaled frame stays centered
         scale: root.frameScale
         title: "SETTINGS"
         focus: root.showHere
 
         Keys.onPressed: event => {
+            if (Keybinds.recordingId !== "") {
+                if (event.key === Qt.Key_Escape) {
+                    Keybinds.cancelRecording();
+                    event.accepted = true;
+                    return;
+                }
+                if (Keybinds.capture(event.key, event.modifiers))
+                    event.accepted = true;
+                return;
+            }
             if (event.key === Qt.Key_Escape) {
                 root.close();
                 event.accepted = true;
@@ -117,7 +141,7 @@ PanelWindow {
             spacing: 10
 
             Item {
-                Layout.preferredWidth: 150
+                Layout.preferredWidth: 180
                 Layout.fillHeight: true
 
                 Column {
@@ -130,7 +154,7 @@ PanelWindow {
                         width: parent.width
                         text: "SECTIONS"
                         color: Theme.textMuted
-                        font.pixelSize: Theme.fontExtraSmall
+                        font.pixelSize: Theme.fontExtraSmall + 2
                     }
 
                     Repeater {
@@ -152,7 +176,7 @@ PanelWindow {
                     anchors.bottom: parent.bottom
                     text: "ESC CLOSE"
                     color: Theme.textMuted
-                    font.pixelSize: Theme.fontExtraSmall
+                    font.pixelSize: Theme.fontExtraSmall + 2
                 }
             }
 
@@ -192,14 +216,50 @@ PanelWindow {
                 }
             }
         }
+
+        MouseArea {
+            anchors.fill: parent
+            visible: Keybinds.mouseMode !== ""
+            z: 50
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+            cursorShape: Qt.PointingHandCursor
+            onClicked: mouse => Keybinds.mouseClicked(mouse.button)
+            onWheel: wheel => Keybinds.mouseWheel(wheel.angleDelta.y)
+        }
+
+        Rectangle {
+            visible: Keybinds.mouseMode !== ""
+            anchors.top: parent.top
+            anchors.topMargin: 4
+            anchors.horizontalCenter: parent.horizontalCenter
+            z: 51
+            width: mouseHint.width + 16
+            height: mouseHint.height + 6
+            color: Theme.highlight
+
+            RText {
+                id: mouseHint
+
+                anchors.centerIn: parent
+                text: "CLICK / SCROLL TO ASSIGN // ESC CANCEL"
+                color: Theme.bg
+                font.pixelSize: Theme.fontSmall
+            }
+        }
     }
 
-    onTabChanged: flick.contentY = 0
+    onTabChanged: {
+        if (Keybinds.recordingId !== "")
+            Keybinds.cancelRecording();
+        flick.contentY = 0;
+    }
 
     onShowHereChanged: {
         if (showHere) {
             flick.contentY = 0;
             frame.forceActiveFocus();
+        } else if (Keybinds.recordingId !== "") {
+            Keybinds.cancelRecording();
         }
     }
 }

@@ -14,7 +14,7 @@ RText {
     text: root.label + (root.active ? (root.descending ? " v" : " ^") : "")
     color: root.active ? Theme.textHigh : Theme.textMuted
     horizontalAlignment: root.numeric ? Text.AlignRight : Text.AlignLeft
-    font.pixelSize: Theme.fontExtraSmall
+    font.pixelSize: Theme.fontExtraSmall + 2
 
     TapHandler {
         onTapped: root.clicked()

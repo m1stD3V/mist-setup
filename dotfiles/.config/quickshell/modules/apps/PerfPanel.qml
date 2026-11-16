@@ -34,7 +34,7 @@ Rectangle {
                 text: root.title
                 color: Theme.textDim
                 elide: Text.ElideRight
-                font.pixelSize: Theme.fontExtraSmall + 2
+                font.pixelSize: Theme.fontSmall
             }
 
             RText {

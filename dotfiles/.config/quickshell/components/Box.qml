@@ -12,7 +12,8 @@ Rectangle {
     property color innerBorderColor: Theme.border
 
     readonly property bool hasTitle: title.length > 0
-    readonly property int titleBarH: 18
+    property int titleBarH: Theme.titleBarHeight
+    property int titlePixelSize: Theme.fontSmall + 2
 
     color: Theme.barBg
     border.width: 1
@@ -41,7 +42,7 @@ Rectangle {
             anchors.leftMargin: 8
             text: root.title
             color: Theme.inverseText
-            font.pixelSize: Theme.fontExtraSmall + 2
+            font.pixelSize: root.titlePixelSize
         }
     }
 

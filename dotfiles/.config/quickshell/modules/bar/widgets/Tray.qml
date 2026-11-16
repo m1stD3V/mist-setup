@@ -7,10 +7,13 @@ import Quickshell.Services.SystemTray
 import qs.Theme
 import qs.components
 
+// System tray icons plus their DBusMenu popup. Height comes from BarPopup's
+// content measurement, so a menu that changes while open (many apps rewrite it
+// on every open) cannot leave the box the wrong size.
 Row {
     id: root
 
-    property PanelWindow window
+    property var window
 
     spacing: 6
     visible: implicitWidth > 0
@@ -31,6 +34,9 @@ Row {
             implicitHeight: 20
             visible: iconItem.loaded
             color: mouse.hovered ? Theme.surfaceHigh : "transparent"
+
+            Accessible.role: Accessible.Button
+            Accessible.name: trayEntry.modelData.title || trayEntry.modelData.id
 
             MonoIcon {
                 id: iconItem
@@ -53,29 +59,44 @@ Row {
                             root.openMenu(trayEntry.modelData);
                         else
                             trayEntry.modelData.activate();
+                    } else if (trayEntry.modelData.hasMenu) {
+                        root.openMenu(trayEntry.modelData);
                     } else {
-                        if (trayEntry.modelData.hasMenu)
-                            root.openMenu(trayEntry.modelData);
-                        else
-                            trayEntry.modelData.secondaryActivate();
+                        trayEntry.modelData.secondaryActivate();
                     }
                 }
             }
         }
     }
 
+    // Resolve a StatusNotifierItem icon name. Some apps send
+    // "name?path=/dir" so a bundled icon can be found; the themed lookup comes
+    // first and the bundled file is the fallback. Returns "" when nothing
+    // resolves, which makes MonoIcon unload and collapse the entry instead of
+    // drawing a broken image.
     function iconFor(icon: string): string {
-        if (icon.includes("?path=")) {
-            const [name, path] = icon.split("?path=");
+        if (!icon)
+            return "";
+        const marker = icon.indexOf("?path=");
+        if (marker !== -1) {
+            const name = icon.slice(0, marker);
+            const dir = icon.slice(marker + 6).replace(/\/+$/, "");
             const file = name.slice(name.lastIndexOf("/") + 1);
             const themed = Quickshell.iconPath(file, true);
             if (themed)
                 return themed;
-            return Qt.resolvedUrl(`${path}/${file}`);
+            if (dir.length > 0 && file.length > 0)
+                return encodeURI("file://" + dir + "/" + file);
+            return "";
         }
         if (icon.startsWith("/"))
-            return `file://${icon}`;
+            return encodeURI("file://" + icon);
         return Quickshell.iconPath(icon, true) ?? "";
+    }
+
+    // DBus menus mark mnemonics with "&"; "&&" is a literal ampersand.
+    function menuLabel(text: var): string {
+        return String(text ?? "").replace(/&&/g, "\u0000").replace(/&([^&])/g, "$1").replace(/\u0000/g, "&");
     }
 
     function openMenu(item: SystemTrayItem): void {
@@ -102,17 +123,15 @@ Row {
         screenEdge: "right"
         title: ""
         contentWidth: Theme.popupWidth
-        contentHeight: {
-            let h = 0;
-            for (const e of opener.children.values)
-                h += e.isSeparator ? 9 : Theme.popupRowHeight;
-            return h + 18;
-        }
         open: false
+
+        // the item can vanish while its menu is open (app quit, tray reload)
+        onEntryChanged: if (entry === null)
+            menuPopup.open = false
 
         content: Component {
             Column {
-                anchors.fill: parent
+                width: parent.width
                 spacing: 0
 
                 Repeater {
@@ -123,9 +142,12 @@ Row {
 
                         required property var modelData
 
+                        readonly property bool inert: !modelData.enabled || modelData.isSeparator
+                        readonly property bool hot: mouse.hovered && !menuEntry.inert
+
                         width: parent.width
                         height: modelData.isSeparator ? 9 : Theme.popupRowHeight
-                        color: mouse.hovered && menuEntry.modelData.enabled && !menuEntry.modelData.isSeparator ? Theme.highlight : "transparent"
+                        color: menuEntry.hot ? Theme.highlight : "transparent"
 
                         Rectangle {
                             anchors.centerIn: parent
@@ -139,9 +161,9 @@ Row {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
                             anchors.leftMargin: 6
-                            text: menuEntry.modelData.text.replace(/&([^&])/g, "$1")
+                            text: root.menuLabel(menuEntry.modelData.text)
                             font.pixelSize: Theme.fontSmall
-                            color: menuEntry.modelData.enabled ? (mouse.hovered && !menuEntry.modelData.isSeparator ? Theme.inverseText : Theme.text) : Theme.textMuted
+                            color: menuEntry.modelData.enabled ? (menuEntry.hot ? Theme.inverseText : Theme.text) : Theme.textMuted
                             elide: Text.ElideRight
                             width: parent.width - 24
                         }
@@ -151,7 +173,7 @@ Row {
 
                             anchors.fill: parent
                             hoverEnabled: true
-                            enabled: menuEntry.modelData.enabled && !menuEntry.modelData.isSeparator
+                            enabled: !menuEntry.inert
 
                             onClicked: {
                                 menuEntry.modelData.triggered();

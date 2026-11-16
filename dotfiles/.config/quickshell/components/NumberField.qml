@@ -13,7 +13,9 @@ Item {
     signal submitted(int value)
 
     implicitWidth: 70
-    implicitHeight: 40
+    // stepper + gap + caption: measured, not a guess, so the caption can never
+    // stick out of the field's bounds
+    implicitHeight: stepper.height + 2 + labelText.implicitHeight
 
     function pad2(n: int): string {
         return n < 10 ? "0" + n : "" + n;
@@ -111,6 +113,8 @@ Item {
     }
 
     RText {
+        id: labelText
+
         anchors.top: stepper.bottom
         anchors.topMargin: 2
         anchors.horizontalCenter: parent.horizontalCenter

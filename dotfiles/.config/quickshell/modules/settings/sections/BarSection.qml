@@ -70,11 +70,28 @@ Column {
             onToggled: Settings.showActiveWindow = !Settings.showActiveWindow
         }
 
+        Controls.SettingSlider {
+            width: parent.width
+            label: "WORKSPACE COUNT"
+            value: Settings.workspaceCount
+            from: 1
+            to: 16
+            step: 1
+            onMoved: v => Settings.workspaceCount = Math.round(v)
+        }
+
         Controls.SettingToggle {
             width: parent.width
             label: "TRAY"
             checked: Settings.showTray
             onToggled: Settings.showTray = !Settings.showTray
+        }
+
+        Controls.SettingToggle {
+            width: parent.width
+            label: "CONTROL CENTER"
+            checked: Settings.showControlCenter
+            onToggled: Settings.showControlCenter = !Settings.showControlCenter
         }
 
         Controls.SettingToggle {
@@ -86,23 +103,9 @@ Column {
 
         Controls.SettingToggle {
             width: parent.width
-            label: "NOTIFICATIONS"
-            checked: Settings.showNotifications
-            onToggled: Settings.showNotifications = !Settings.showNotifications
-        }
-
-        Controls.SettingToggle {
-            width: parent.width
             label: "DISCORD"
             checked: Settings.showDiscord
             onToggled: Settings.showDiscord = !Settings.showDiscord
-        }
-
-        Controls.SettingToggle {
-            width: parent.width
-            label: "VOLUME"
-            checked: Settings.showVolume
-            onToggled: Settings.showVolume = !Settings.showVolume
         }
 
         Controls.SettingToggle {

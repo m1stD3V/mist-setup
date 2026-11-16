@@ -21,8 +21,6 @@ BarPopup {
     property string message: ""
     property bool messageError: false
 
-    signal passwordSubmitted(string psk)
-
     screenEdge: "left"
     title: "NETWORK"
     contentWidth: Theme.popupWidth
@@ -34,12 +32,9 @@ BarPopup {
     WlrLayershell.keyboardFocus: open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     readonly property int wiredCount: Network.wiredDevices.length
-    readonly property int headerHeight: rowH + wiredCount * rowH + 9 + 22
     readonly property int bodyHeight: Math.max(1, Math.min(Network.wifiNetworks.length, maxRows)) * rowH
-    readonly property int promptHeight: passwordNetwork !== null ? 36 : (forgetNetwork !== null ? rowH : 0)
-    readonly property int footerHeight: 22
-
-    contentHeight: headerHeight + bodyHeight + promptHeight + footerHeight + Theme.popupChromeHeight
+    readonly property int promptHeight: passwordNetwork !== null ? 40 : (forgetNetwork !== null ? rowH : 0)
+    readonly property int footerHeight: 26
 
     onOpenChanged: {
         if (open) {
@@ -53,8 +48,6 @@ BarPopup {
             messageTimer.stop();
         }
     }
-
-    onPasswordSubmitted: psk => root.submitPassword(psk)
 
     function showMessage(text: string, error: bool): void {
         message = text;
@@ -164,14 +157,14 @@ BarPopup {
                 echoMode: TextInput.Password
                 color: Theme.textHigh
                 font.family: Theme.family
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontMedium
                 selectByMouse: true
                 clip: true
                 focus: true
 
                 Component.onCompleted: forceActiveFocus()
 
-                onAccepted: root.passwordSubmitted(text)
+                onAccepted: root.submitPassword(text)
 
                 Keys.onEscapePressed: event => {
                     root.passwordNetwork = null;
@@ -186,7 +179,7 @@ BarPopup {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "OK"
                 color: okMouse.containsMouse ? Theme.textHigh : Theme.textDim
-                font.pixelSize: Theme.fontExtraSmall + 2
+                font.pixelSize: Theme.fontSmall
 
                 MouseArea {
                     id: okMouse
@@ -194,7 +187,7 @@ BarPopup {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.passwordSubmitted(pskField.text)
+                    onClicked: root.submitPassword(pskField.text)
                 }
             }
         }
@@ -220,7 +213,7 @@ BarPopup {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "FORGET " + (root.forgetNetwork?.name ?? "").toUpperCase() + "?"
                 color: Theme.text
-                font.pixelSize: Theme.fontExtraSmall + 2
+                font.pixelSize: Theme.fontSmall
                 elide: Text.ElideRight
             }
 
@@ -232,7 +225,7 @@ BarPopup {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "NO"
                 color: noMouse.containsMouse ? Theme.textHigh : Theme.textDim
-                font.pixelSize: Theme.fontExtraSmall + 2
+                font.pixelSize: Theme.fontSmall
 
                 MouseArea {
                     id: noMouse
@@ -255,7 +248,7 @@ BarPopup {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "YES"
                 color: yesMouse.containsMouse ? Theme.textHigh : Theme.textDim
-                font.pixelSize: Theme.fontExtraSmall + 2
+                font.pixelSize: Theme.fontSmall
 
                 MouseArea {
                     id: yesMouse
@@ -275,7 +268,7 @@ BarPopup {
 
     content: Component {
         Column {
-            anchors.fill: parent
+            width: parent.width
             spacing: 0
 
             // Wi-Fi radio
@@ -290,7 +283,7 @@ BarPopup {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "WI-FI"
                     color: Theme.text
-                    font.pixelSize: Theme.fontExtraSmall + 2
+                    font.pixelSize: Theme.fontSmall
                 }
 
                 RText {
@@ -299,7 +292,7 @@ BarPopup {
                     anchors.verticalCenter: parent.verticalCenter
                     text: !Network.available ? "N/A" : (!Network.wifiAvailable ? "NO ADAPTER" : (!Network.wifiHardwareOn ? "HW OFF" : (Network.wifiOn ? "ON" : "OFF")))
                     color: Network.wifiOn && Network.wifiHardwareOn ? Theme.textHigh : Theme.textMuted
-                    font.pixelSize: Theme.fontExtraSmall + 2
+                    font.pixelSize: Theme.fontSmall
                 }
 
                 MouseArea {
@@ -345,7 +338,7 @@ BarPopup {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "WIRED"
                             color: Theme.text
-                            font.pixelSize: Theme.fontExtraSmall + 2
+                            font.pixelSize: Theme.fontSmall
                         }
 
                         RText {
@@ -353,7 +346,7 @@ BarPopup {
                             width: Math.max(0, wiredRow.width - 160)
                             text: (wiredRow.modelData.name ?? "").toUpperCase()
                             color: Theme.textDim
-                            font.pixelSize: Theme.fontExtraSmall + 2
+                            font.pixelSize: Theme.fontSmall
                             elide: Text.ElideRight
                         }
                     }
@@ -364,7 +357,7 @@ BarPopup {
                         anchors.verticalCenter: parent.verticalCenter
                         text: wiredRow.modelData.connected ? "CONNECTED" : (Network.stateLabel(wiredRow.modelData).length > 0 ? Network.stateLabel(wiredRow.modelData) : (wiredRow.modelData.hasLink ? "LINK UP" : "LINK DOWN"))
                         color: wiredRow.modelData.connected ? Theme.textHigh : (wiredRow.modelData.hasLink ? Theme.textDim : Theme.textMuted)
-                        font.pixelSize: Theme.fontExtraSmall + 2
+                        font.pixelSize: Theme.fontSmall
                     }
 
                     MouseArea {
@@ -394,7 +387,7 @@ BarPopup {
             // List heading
             Rectangle {
                 width: parent.width
-                height: 22
+                height: 26
                 color: "transparent"
 
                 RText {
@@ -403,7 +396,7 @@ BarPopup {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "NETWORKS"
                     color: Theme.textMuted
-                    font.pixelSize: Theme.fontExtraSmall
+                    font.pixelSize: Theme.fontExtraSmall + 2
                 }
 
                 RText {
@@ -414,7 +407,7 @@ BarPopup {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "SCAN"
                     color: scanMouse.containsMouse ? Theme.textHigh : Theme.textDim
-                    font.pixelSize: Theme.fontExtraSmall
+                    font.pixelSize: Theme.fontExtraSmall + 2
 
                     MouseArea {
                         id: scanMouse
@@ -463,7 +456,7 @@ BarPopup {
                             anchors.verticalCenter: parent.verticalCenter
                             text: netRow.net?.connected ? ">" : (netRow.net?.known ? "+" : " ")
                             color: netRow.hovered ? Theme.inverseText : (netRow.net?.connected ? Theme.textHigh : Theme.textMuted)
-                            font.pixelSize: Theme.fontExtraSmall + 2
+                            font.pixelSize: Theme.fontSmall
                         }
 
                         RText {
@@ -475,7 +468,7 @@ BarPopup {
                             width: Math.max(0, netRow.width - marker.width - rightGroup.width - 22)
                             text: (netRow.net?.name ?? "").toUpperCase()
                             color: netRow.hovered ? Theme.inverseText : Theme.text
-                            font.pixelSize: Theme.fontExtraSmall + 2
+                            font.pixelSize: Theme.fontSmall
                             elide: Text.ElideRight
                             maximumLineCount: 1
                         }
@@ -571,7 +564,7 @@ BarPopup {
                     visible: netList.count === 0
                     text: root.emptyText()
                     color: Theme.textMuted
-                    font.pixelSize: Theme.fontExtraSmall + 2
+                    font.pixelSize: Theme.fontSmall
                 }
 
                 Rectangle {

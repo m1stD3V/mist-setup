@@ -18,7 +18,7 @@ Item {
 
     readonly property real ratio: Math.max(0, Math.min(1, (root.value - root.from) / (root.to - root.from)))
 
-    implicitHeight: 46
+    implicitHeight: 50
 
     function clampValue(v: real): real {
         const clamped = Math.max(root.from, Math.min(root.to, v));
@@ -37,7 +37,7 @@ Item {
         anchors.top: parent.top
         text: root.label
         color: Theme.text
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
     }
 
     RText {
@@ -45,7 +45,7 @@ Item {
         anchors.top: parent.top
         text: Math.round(root.value * root.displayScale) + root.suffix
         color: Theme.textDim
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
     }
 
     Item {
@@ -54,7 +54,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.topMargin: 22
+        anchors.topMargin: 26
         height: 18
 
         Rectangle {

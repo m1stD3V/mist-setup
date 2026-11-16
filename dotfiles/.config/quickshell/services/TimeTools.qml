@@ -15,6 +15,15 @@ Singleton {
     property bool alarmRinging: false
     property int _nextAlarmId: 1
 
+    // ---- add-dialog drafts ----
+    // Kept here rather than in the clock chip so they survive the popup closing
+    // and are shared by every screen's bar.
+    property int newAlarmHour: 7
+    property int newAlarmMinute: 0
+    property int reminderMinutes: 15
+    property int reminderHour: 9
+    property int reminderMinute: 0
+
     // ---- countdown timer ----
     property int timerTotal: 25 * 60
     property int timerRemaining: 25 * 60
@@ -41,8 +50,13 @@ Singleton {
     property string alertKind: ""
     property int alertPlays: 0
 
-    function _pad(n: int): string {
+    function pad2(n: int): string {
         return n < 10 ? "0" + n : "" + n;
+    }
+
+    // kept for the internal formatters; public callers use pad2
+    function _pad(n: int): string {
+        return root.pad2(n);
     }
 
     function fmt(secs: int): string {
@@ -56,12 +70,14 @@ Singleton {
     }
 
     function addAlarm(h: int, m: int): void {
-        if (alarms.some(a => a.hour === h && a.minute === m))
+        const hour = Math.max(0, Math.min(23, Math.round(h)));
+        const minute = Math.max(0, Math.min(59, Math.round(m)));
+        if (alarms.some(a => a.hour === hour && a.minute === minute))
             return;
         const list = alarms.concat([{
                 "id": _nextAlarmId++,
-                "hour": h,
-                "minute": m,
+                "hour": hour,
+                "minute": minute,
                 "enabled": true,
                 "lastKey": ""
             }]);

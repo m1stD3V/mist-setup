@@ -14,11 +14,12 @@ Singleton {
     property bool wallpaperOpen: false
     property bool appsOpen: false
     property bool settingsOpen: false
+    property bool clipboardOpen: false
     property string appsTab: "processes"
-    // set at press-time by popup buttons so the bar background tap
-    // does not close the very popup the same click just opened
-    property bool popupClickGuard: false
-    // small bar popup currently open; opening another closes it first
+    // small bar popup currently open; opening another closes it first. The
+    // "don't dismiss the popup this click just opened" guard lives on each Bar
+    // (timestamped), because popups are per screen and a global flag let one
+    // monitor swallow another's clicks.
     property var activePopup: null
 
     // OSD state
@@ -35,47 +36,99 @@ Singleton {
         osdTimer.restart();
     }
 
-    function toggleLauncher(): void {
-        launcherOpen = !launcherOpen;
-        if (launcherOpen) {
-            dismissPopup();
+    // Centred overlays are mutually exclusive: opening one closes the rest.
+    function closeOverlays(keep: string): void {
+        if (keep !== "launcher")
+            launcherOpen = false;
+        if (keep !== "sysmon")
             sysmonOpen = false;
+        if (keep !== "session")
             sessionOpen = false;
+        if (keep !== "wallpaper")
+            wallpaperOpen = false;
+        if (keep !== "apps")
             appsOpen = false;
+        if (keep !== "settings")
             settingsOpen = false;
+        if (keep !== "clipboard")
+            clipboardOpen = false;
+    }
+
+    function toggleLauncher(): void {
+        const open = !launcherOpen;
+        if (open) {
+            dismissPopup();
+            closeOverlays("launcher");
         }
+        launcherOpen = open;
     }
 
     function toggleSysmon(): void {
-        sysmonOpen = !sysmonOpen;
-        if (sysmonOpen) {
+        const open = !sysmonOpen;
+        if (open) {
             dismissPopup();
-            launcherOpen = false;
-            sessionOpen = false;
-            appsOpen = false;
-            settingsOpen = false;
+            closeOverlays("sysmon");
         }
+        sysmonOpen = open;
     }
 
     function toggleSession(): void {
-        sessionOpen = !sessionOpen;
-        if (sessionOpen) {
+        const open = !sessionOpen;
+        if (open) {
             dismissPopup();
-            launcherOpen = false;
-            sysmonOpen = false;
-            appsOpen = false;
-            settingsOpen = false;
+            closeOverlays("session");
         }
+        sessionOpen = open;
+    }
+
+    function toggleWallpaper(): void {
+        const open = !wallpaperOpen;
+        if (open) {
+            dismissPopup();
+            closeOverlays("wallpaper");
+        }
+        wallpaperOpen = open;
+    }
+
+    function toggleSettings(): void {
+        const open = !settingsOpen;
+        if (open) {
+            dismissPopup();
+            closeOverlays("settings");
+        }
+        settingsOpen = open;
+    }
+
+    function toggleClipboard(): void {
+        const open = !clipboardOpen;
+        if (open) {
+            dismissPopup();
+            closeOverlays("clipboard");
+        }
+        clipboardOpen = open;
+    }
+
+    function toggleApps(): void {
+        if (appsOpen) {
+            appsOpen = false;
+            return;
+        }
+        appsTab = "processes";
+        dismissPopup();
+        closeOverlays("apps");
+        appsOpen = true;
+    }
+
+    function openApps(tab: string): void {
+        appsTab = tab;
+        dismissPopup();
+        closeOverlays("apps");
+        appsOpen = true;
     }
 
     function closeAll(): void {
         dismissPopup();
-        launcherOpen = false;
-        sysmonOpen = false;
-        sessionOpen = false;
-        wallpaperOpen = false;
-        appsOpen = false;
-        settingsOpen = false;
+        closeOverlays("");
     }
 
     function dismissPopup(): void {
@@ -92,56 +145,6 @@ Singleton {
     function deactivatePopup(popup: var): void {
         if (activePopup === popup)
             activePopup = null;
-    }
-
-    function toggleWallpaper(): void {
-        wallpaperOpen = !wallpaperOpen;
-        if (wallpaperOpen) {
-            dismissPopup();
-            launcherOpen = false;
-            sysmonOpen = false;
-            sessionOpen = false;
-            appsOpen = false;
-            settingsOpen = false;
-        }
-    }
-
-    function toggleSettings(): void {
-        settingsOpen = !settingsOpen;
-        if (settingsOpen) {
-            dismissPopup();
-            launcherOpen = false;
-            sysmonOpen = false;
-            sessionOpen = false;
-            wallpaperOpen = false;
-            appsOpen = false;
-        }
-    }
-
-    function toggleApps(): void {
-        if (appsOpen) {
-            appsOpen = false;
-            return;
-        }
-        appsTab = "processes";
-        appsOpen = true;
-        dismissPopup();
-        launcherOpen = false;
-        sysmonOpen = false;
-        sessionOpen = false;
-        wallpaperOpen = false;
-        settingsOpen = false;
-    }
-
-    function openApps(tab: string): void {
-        appsTab = tab;
-        appsOpen = true;
-        dismissPopup();
-        launcherOpen = false;
-        sysmonOpen = false;
-        sessionOpen = false;
-        wallpaperOpen = false;
-        settingsOpen = false;
     }
 
     Timer {

@@ -6,38 +6,24 @@ import qs.Theme
 import qs.components
 import qs.services
 
-// Compact application search field in the bar. Opens a dropdown
-// powered by the program executor's app index.
-Rectangle {
+// Compact application search field in the bar. Opens a dropdown powered by the
+// program executor's app index.
+BarChip {
     id: root
 
-    property PanelWindow window
+    property var window
 
-    function closePopup(): void {
-        popup.open = false;
-    }
+    bar: root.window
+    active: popup.open
+    accessibleName: qsTr("Search")
 
     implicitWidth: 150
-    implicitHeight: Theme.barHeight - 10
-    color: hover.hovered || popup.open ? Theme.highlight : "transparent"
-    border.width: 1
-    border.color: hover.hovered || popup.open ? Theme.highlight : Theme.borderHigh
 
-    HoverHandler {
-        id: hover
-    }
-
-    TapHandler {
-        onPressedChanged: if (pressed)
-            ShellState.popupClickGuard = true
-
-        onTapped: popup.open = !popup.open
-    }
+    onTapped: popup.open = !popup.open
 
     RText {
-        anchors.centerIn: parent
         text: "SEARCH"
-        color: hover.hovered || popup.open ? Theme.inverseText : Theme.text
+        color: root.hot ? Theme.inverseText : Theme.text
         font.pixelSize: Theme.fontExtraSmall + 2
     }
 

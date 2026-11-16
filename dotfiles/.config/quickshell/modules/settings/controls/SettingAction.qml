@@ -13,7 +13,7 @@ Rectangle {
 
     signal clicked
 
-    implicitHeight: 28
+    implicitHeight: 30
     color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.highlight) : "transparent"
     border.width: 0
 
@@ -33,7 +33,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
         color: root.active || hover.hovered ? (root.danger ? Theme.bg : Theme.inverseText) : (root.danger ? Theme.textHigh : Theme.text)
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
         elide: Text.ElideRight
     }
 

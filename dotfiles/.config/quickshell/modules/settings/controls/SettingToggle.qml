@@ -12,7 +12,7 @@ Item {
 
     signal toggled
 
-    implicitHeight: root.description.length > 0 ? 36 : 28
+    implicitHeight: root.description.length > 0 ? 40 : 30
 
     HoverHandler {
         id: hover
@@ -33,7 +33,7 @@ Item {
             width: parent.width
             text: root.label
             color: Theme.text
-            font.pixelSize: Theme.fontExtraSmall + 2
+            font.pixelSize: Theme.fontSmall
             elide: Text.ElideRight
         }
 
@@ -52,15 +52,15 @@ Item {
 
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        width: 44
-        height: 18
+        width: 46
+        height: 20
         color: root.checked ? Theme.highlight : Theme.surfaceHigh
         border.width: 1
         border.color: hover.hovered ? Theme.textHigh : Theme.borderHigh
 
         Rectangle {
-            width: 12
-            height: 12
+            width: 14
+            height: 14
             y: 2
             x: root.checked ? parent.width - width - 3 : 3
             color: root.checked ? Theme.inverseText : Theme.textDim

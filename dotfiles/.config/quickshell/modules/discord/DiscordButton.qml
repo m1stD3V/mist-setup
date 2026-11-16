@@ -13,7 +13,7 @@ Rectangle {
     signal clicked
 
     implicitWidth: labelText.implicitWidth + 16
-    implicitHeight: 24
+    implicitHeight: 26
 
     color: root.active || hover.hovered ? (root.danger ? Theme.textHigh : Theme.highlight) : Theme.surfaceHigh
     border.width: 1
@@ -37,6 +37,6 @@ Rectangle {
                 return root.danger ? Theme.bg : Theme.inverseText;
             return root.danger ? Theme.textHigh : Theme.text;
         }
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
     }
 }

@@ -11,10 +11,13 @@ import qs.modules.osd
 import qs.modules.notifs
 import qs.modules.sysmon
 import qs.modules.session
+import qs.modules.lock
 import qs.modules.wallpaper
 import qs.modules.discord
 import qs.modules.apps
 import qs.modules.settings
+import qs.modules.clipboard
+import qs.modules.polkit
 
 ShellRoot {
     id: root
@@ -65,6 +68,9 @@ ShellRoot {
         Session {}
     }
 
+    // session lock is one global object; it creates a surface per screen
+    LockScreen {}
+
     Variants {
         model: Quickshell.screens
 
@@ -87,6 +93,18 @@ ShellRoot {
         model: Quickshell.screens
 
         SettingsPanel {}
+    }
+
+    Variants {
+        model: Quickshell.screens
+
+        ClipboardPicker {}
+    }
+
+    Variants {
+        model: Quickshell.screens
+
+        PolkitPrompt {}
     }
 
     IpcHandler {
@@ -112,6 +130,26 @@ ShellRoot {
 
         function toggleSettings(): void {
             ShellState.toggleSettings();
+        }
+
+        function toggleClipboard(): void {
+            ShellState.toggleClipboard();
+        }
+
+        function screenshot(): void {
+            Capture.region();
+        }
+
+        function screenshotFull(): void {
+            Capture.full();
+        }
+
+        function captureText(): void {
+            Capture.ocr();
+        }
+
+        function lock(): void {
+            Lock.lock();
         }
 
         function brightness(): void {

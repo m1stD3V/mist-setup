@@ -20,9 +20,11 @@ PanelWindow {
 
     readonly property bool showHere: ShellState.sessionOpen && onFocused
 
-    // frame is designed for a 1920x1080 logical desktop; shrink proportionally
-    // on smaller screens so the window always fits
-    readonly property real frameScale: Math.min(1, Math.min(modelData.width / 1920, modelData.height / 1080))
+    readonly property int frameWidth: 360
+    readonly property int frameHeight: 250
+
+    // shrink only if the frame cannot fit this screen at full size
+    readonly property real frameScale: Theme.fitScale(modelData.width, modelData.height, root.frameWidth, root.frameHeight)
 
     readonly property var actions: [{
             "label": "SHUTDOWN",
@@ -62,8 +64,8 @@ PanelWindow {
         id: frame
 
         anchors.centerIn: parent
-        width: 320
-        height: 220
+        width: root.frameWidth
+        height: root.frameHeight
         // transformOrigin defaults to Item.Center, so the scaled frame stays centered
         scale: root.frameScale
         title: "SYSTEM MENU"

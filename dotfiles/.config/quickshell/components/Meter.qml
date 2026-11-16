@@ -34,7 +34,7 @@ Item {
             anchors.centerIn: parent
             text: root.label
             color: Theme.inverseText
-            font.pixelSize: Theme.fontExtraSmall + 2
+            font.pixelSize: Theme.fontSmall
         }
     }
 
@@ -61,8 +61,9 @@ Item {
 
         anchors.verticalCenter: parent.verticalCenter
         x: grid.x + grid.width + root.spacing
+        visible: root.showPct
         text: Math.round(root.value * 100) + "%"
         color: Theme.textDim
-        font.pixelSize: Theme.fontExtraSmall + 2
+        font.pixelSize: Theme.fontSmall
     }
 }

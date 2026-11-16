@@ -21,6 +21,8 @@ PanelWindow {
         return !!fm && fm.name === (Hypr.monitorFor(modelData)?.name ?? "");
     }
     readonly property bool showHere: ShellState.appsOpen && onFocused
+    readonly property int frameWidth: 700
+    readonly property int frameHeight: 600
 
     property string mode: "processes"
     property var windows: []
@@ -385,8 +387,8 @@ PanelWindow {
 
     Box {
         anchors.centerIn: parent
-        width: 640
-        height: 560
+        width: root.frameWidth
+        height: root.frameHeight
         title: "TASK MANAGER"
         focus: root.showHere
 
@@ -425,7 +427,7 @@ PanelWindow {
 
             Item {
                 width: parent.width
-                height: parent.height - 35
+                height: parent.height - 39
 
                 // ================= PROCESSES =================
                 Column {
@@ -435,12 +437,12 @@ PanelWindow {
 
                     RowLayout {
                         width: parent.width
-                        height: 24
+                        height: 28
                         spacing: 6
 
                         Rectangle {
-                            Layout.preferredWidth: 210
-                            height: 22
+                            Layout.preferredWidth: 240
+                            height: 26
                             color: Theme.surfaceHigh
                             border.width: 1
                             border.color: search.activeFocus ? Theme.textHigh : Theme.borderHigh
@@ -452,7 +454,7 @@ PanelWindow {
                                 anchors.margins: 3
                                 color: Theme.text
                                 font.family: Theme.family
-                                font.pixelSize: Theme.fontExtraSmall + 2
+                                font.pixelSize: Theme.fontSmall
                                 selectByMouse: true
                                 clip: true
 
@@ -471,7 +473,7 @@ PanelWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: "FILTER NAME / PID / USER"
                                 color: Theme.textMuted
-                                font.pixelSize: Theme.fontExtraSmall
+                                font.pixelSize: Theme.fontExtraSmall + 2
                             }
                         }
 
@@ -482,14 +484,14 @@ PanelWindow {
                         RText {
                             text: root.procView.length + " / " + Processes.list.length + " PROCESSES"
                             color: Theme.textMuted
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
                     }
 
                     RowLayout {
                         x: 4
                         width: parent.width - 8
-                        height: 14
+                        height: 18
                         spacing: 6
 
                         TableHeader {
@@ -501,7 +503,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 72
+                            Layout.preferredWidth: 78
                             label: "USER"
                             active: root.procSort === "user"
                             descending: root.procDesc
@@ -509,7 +511,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 60
+                            Layout.preferredWidth: 64
                             label: "PID"
                             numeric: true
                             active: root.procSort === "pid"
@@ -518,7 +520,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 45
+                            Layout.preferredWidth: 52
                             label: "CPU"
                             numeric: true
                             active: root.procSort === "cpu"
@@ -527,7 +529,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 45
+                            Layout.preferredWidth: 52
                             label: "MEM"
                             numeric: true
                             active: root.procSort === "mem"
@@ -536,7 +538,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 70
+                            Layout.preferredWidth: 76
                             label: "RSS"
                             numeric: true
                             active: root.procSort === "rss"
@@ -545,7 +547,7 @@ PanelWindow {
                         }
 
                         TableHeader {
-                            Layout.preferredWidth: 58
+                            Layout.preferredWidth: 74
                             label: "STATUS"
                             active: root.procSort === "status"
                             descending: root.procDesc
@@ -557,7 +559,7 @@ PanelWindow {
                         id: procList
 
                         width: parent.width
-                        height: parent.height - 134
+                        height: parent.height - 152
                         clip: true
                         spacing: 1
                         model: root.procView
@@ -570,7 +572,7 @@ PanelWindow {
                             readonly property bool selected: root.selectedPid === procRow.modelData.pid
 
                             width: ListView.view.width
-                            height: 24
+                            height: 27
 
                             Rectangle {
                                 anchors.fill: parent
@@ -592,11 +594,11 @@ PanelWindow {
                                     text: procRow.modelData.name
                                     color: procRow.selected ? Theme.textHigh : Theme.text
                                     elide: Text.ElideRight
-                                    font.pixelSize: Theme.fontExtraSmall + 2
+                                    font.pixelSize: Theme.fontSmall
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 72
+                                    Layout.preferredWidth: 78
                                     text: procRow.modelData.user
                                     color: Theme.textDim
                                     elide: Text.ElideRight
@@ -604,7 +606,7 @@ PanelWindow {
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 60
+                                    Layout.preferredWidth: 64
                                     text: procRow.modelData.pid
                                     color: Theme.textMuted
                                     horizontalAlignment: Text.AlignRight
@@ -612,7 +614,7 @@ PanelWindow {
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 45
+                                    Layout.preferredWidth: 52
                                     text: Math.round(procRow.modelData.cpu) + "%"
                                     color: procRow.modelData.cpu >= 20 ? Theme.textHigh : Theme.textDim
                                     horizontalAlignment: Text.AlignRight
@@ -620,7 +622,7 @@ PanelWindow {
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 45
+                                    Layout.preferredWidth: 52
                                     text: Math.round(procRow.modelData.mem) + "%"
                                     color: Theme.textDim
                                     horizontalAlignment: Text.AlignRight
@@ -628,7 +630,7 @@ PanelWindow {
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 70
+                                    Layout.preferredWidth: 76
                                     text: (procRow.modelData.rssKB / 1024).toFixed(1)
                                     color: Theme.textDim
                                     horizontalAlignment: Text.AlignRight
@@ -636,7 +638,7 @@ PanelWindow {
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 58
+                                    Layout.preferredWidth: 74
                                     text: root.statusText(procRow.modelData.status)
                                     color: procRow.modelData.status.charAt(0) === "R" ? Theme.textHigh : Theme.textMuted
                                     elide: Text.ElideRight
@@ -654,7 +656,7 @@ PanelWindow {
 
                     Rectangle {
                         width: parent.width
-                        height: 84
+                        height: 92
                         color: Theme.surface
                         border.width: 1
                         border.color: Theme.border
@@ -672,7 +674,7 @@ PanelWindow {
                                     text: root.selectedProc ? root.selectedProc.name.toUpperCase() : "NO PROCESS SELECTED"
                                     color: root.selectedProc ? Theme.textHigh : Theme.textMuted
                                     elide: Text.ElideRight
-                                    font.pixelSize: Theme.fontSmall
+                                    font.pixelSize: Theme.fontSmall + 2
                                 }
 
                                 TextButton {
@@ -724,28 +726,28 @@ PanelWindow {
                     RowLayout {
                         x: 4
                         width: parent.width - 8
-                        height: 14
+                        height: 18
                         spacing: 6
 
                         RText {
-                            Layout.preferredWidth: 40
+                            Layout.preferredWidth: 44
                             text: "WS"
                             color: Theme.textMuted
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         RText {
-                            Layout.preferredWidth: 120
+                            Layout.preferredWidth: 130
                             text: "APP"
                             color: Theme.textMuted
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         RText {
                             Layout.fillWidth: true
                             text: "TITLE"
                             color: Theme.textMuted
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         RText {
@@ -753,7 +755,7 @@ PanelWindow {
                             text: "PID"
                             color: Theme.textMuted
                             horizontalAlignment: Text.AlignRight
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         RText {
@@ -761,7 +763,7 @@ PanelWindow {
                             text: "CPU"
                             color: Theme.textMuted
                             horizontalAlignment: Text.AlignRight
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         RText {
@@ -769,7 +771,7 @@ PanelWindow {
                             text: "MEM"
                             color: Theme.textMuted
                             horizontalAlignment: Text.AlignRight
-                            font.pixelSize: Theme.fontExtraSmall
+                            font.pixelSize: Theme.fontExtraSmall + 2
                         }
 
                         Item {
@@ -779,7 +781,7 @@ PanelWindow {
 
                     ListView {
                         width: parent.width
-                        height: parent.height - 18
+                        height: parent.height - 22
                         clip: true
                         spacing: 2
                         model: root.windows
@@ -795,7 +797,7 @@ PanelWindow {
                             readonly property int pid: root.pidOf(winRow.modelData)
 
                             width: ListView.view.width
-                            height: 32
+                            height: 34
 
                             Rectangle {
                                 anchors.fill: parent
@@ -813,18 +815,18 @@ PanelWindow {
                                 spacing: 6
 
                                 RText {
-                                    Layout.preferredWidth: 40
+                                    Layout.preferredWidth: 44
                                     text: "WS" + root.wsOf(winRow.modelData)
                                     color: Theme.textMuted
                                     font.pixelSize: Theme.fontExtraSmall
                                 }
 
                                 RText {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: 130
                                     text: root.classOf(winRow.modelData).toUpperCase()
                                     color: winRow.isActive ? Theme.textHigh : Theme.text
                                     elide: Text.ElideRight
-                                    font.pixelSize: Theme.fontExtraSmall + 2
+                                    font.pixelSize: Theme.fontSmall
                                 }
 
                                 RText {
@@ -832,7 +834,7 @@ PanelWindow {
                                     text: root.titleOf(winRow.modelData)
                                     color: Theme.textDim
                                     elide: Text.ElideRight
-                                    font.pixelSize: Theme.fontExtraSmall + 2
+                                    font.pixelSize: Theme.fontSmall
                                 }
 
                                 RText {
@@ -980,7 +982,7 @@ PanelWindow {
                                 RText {
                                     text: "SYSTEM"
                                     color: Theme.textDim
-                                    font.pixelSize: Theme.fontExtraSmall + 2
+                                    font.pixelSize: Theme.fontSmall
                                 }
 
                                 Repeater {
@@ -1023,7 +1025,7 @@ PanelWindow {
                             RText {
                                 text: "TOP CPU"
                                 color: Theme.textHigh
-                                font.pixelSize: Theme.fontExtraSmall + 2
+                                font.pixelSize: Theme.fontSmall
                             }
 
                             Repeater {
@@ -1059,7 +1061,7 @@ PanelWindow {
                             RText {
                                 text: "TOP MEMORY"
                                 color: Theme.textHigh
-                                font.pixelSize: Theme.fontExtraSmall + 2
+                                font.pixelSize: Theme.fontSmall
                             }
 
                             Repeater {

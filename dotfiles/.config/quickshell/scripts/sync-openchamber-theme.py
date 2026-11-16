@@ -64,11 +64,9 @@ def analyze(path):
         [
             "sh",
             "-c",
-            "ffmpeg -hide_banner -loglevel error -i \"$1\" "
-            "-vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - "
-            "| od -An -tu1 -v",
-            "sh",
-            path,
+            "ffmpeg -hide_banner -loglevel error -i '"
+            + path
+            + "' -vf scale=16:9 -frames:v 1 -f rawvideo -pix_fmt rgb24 - | od -An -tu1 -v",
         ]
     )
     b = [int(x) for x in raw.split()]

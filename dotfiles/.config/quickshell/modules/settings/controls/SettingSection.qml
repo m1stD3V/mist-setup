@@ -17,7 +17,7 @@ Column {
         width: parent.width
         text: root.title
         color: Theme.textDim
-        font.pixelSize: Theme.fontExtraSmall
+        font.pixelSize: Theme.fontExtraSmall + 2
     }
 
     Rectangle {

@@ -27,6 +27,36 @@ Column {
 
         Controls.SettingAction {
             width: parent.width
+            label: "CLIPBOARD HISTORY"
+            hint: "OPEN"
+            onClicked: {
+                ShellState.settingsOpen = false;
+                ShellState.toggleClipboard();
+            }
+        }
+
+        Controls.SettingAction {
+            width: parent.width
+            label: "SCREENSHOT REGION"
+            hint: "CAPTURE"
+            onClicked: {
+                ShellState.settingsOpen = false;
+                Capture.region();
+            }
+        }
+
+        Controls.SettingAction {
+            width: parent.width
+            label: "EXTRACT TEXT"
+            hint: "OCR"
+            onClicked: {
+                ShellState.settingsOpen = false;
+                Capture.ocr();
+            }
+        }
+
+        Controls.SettingAction {
+            width: parent.width
             label: "PACKAGE INSTALLER"
             hint: "OPEN"
             onClicked: {

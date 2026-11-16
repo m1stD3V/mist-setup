@@ -24,14 +24,16 @@ PanelWindow {
     readonly property bool fileMode: Launcher.isFileMode(query)
     readonly property string fileQuery: Launcher.fileQueryOf(query)
 
-    readonly property int boxWidth: fileMode ? 620 : Theme.popupWidth
-    readonly property int previewWidth: 280
-    readonly property int boxHeight: 340
+    readonly property int screenW: barWindow.screen?.width ?? 0
+    readonly property int screenH: barWindow.screen?.height ?? 0
+    // never wider/taller than the screen it opens on
+    readonly property int boxWidth: Math.min(fileMode ? 620 : Theme.popupWidth, screenW - Theme.spacingSm * 2)
+    readonly property int previewWidth: Math.min(280, Math.max(0, boxWidth - 320))
+    readonly property int boxHeight: Math.min(340, screenH - Theme.barHeight - Theme.spacingXs * 2)
     property real boxX: Theme.spacingSm
     property real boxY: Theme.barHeight + Theme.spacingXs
 
     function reposition(): void {
-        const screenW = barWindow.screen?.width ?? 0;
         boxX = Math.max(Theme.spacingSm, Math.min(screenW - boxWidth - Theme.spacingSm, Theme.spacingSm));
         boxY = Theme.barHeight + Theme.spacingXs;
     }
@@ -101,6 +103,7 @@ PanelWindow {
     }
 
     Shortcut {
+        enabled: popupRoot.open
         sequences: ["Escape"]
 
         onActivated: popupRoot.open = false
@@ -250,6 +253,9 @@ PanelWindow {
                                         popupRoot.hoveredFile = "";
                                 }
                             }
+
+                            Accessible.role: Accessible.Button
+                            Accessible.name: entry.modelData.label
 
                             TapHandler {
                                 onTapped: {

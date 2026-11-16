@@ -8,45 +8,33 @@ import qs.services
 
 // Overflow menu: keeps the rarer actions (settings, system monitor,
 // wallpapers, session/power) off the bar while leaving them one click away.
-Rectangle {
+BarChip {
     id: root
 
-    property PanelWindow window
+    property var window
+
+    bar: root.window
+    active: popup.open || networkPopup.open
+    accessibleName: qsTr("System menu")
 
     function closePopup(): void {
         popup.open = false;
         networkPopup.open = false;
     }
 
-    implicitWidth: labelText.implicitWidth + 10
-    implicitHeight: Theme.barHeight - 10
-    color: hover.hovered || popup.open || networkPopup.open ? Theme.highlight : "transparent"
-    border.width: 1
-    border.color: hover.hovered || popup.open || networkPopup.open ? Theme.highlight : Theme.borderHigh
-
-    HoverHandler {
-        id: hover
-    }
-
-    TapHandler {
-        onPressedChanged: if (pressed)
-            ShellState.popupClickGuard = true
-
-        onTapped: {
-            networkPopup.open = false;
-            popup.open = !popup.open;
-        }
+    onTapped: {
+        networkPopup.open = false;
+        popup.open = !popup.open;
     }
 
     RText {
-        id: labelText
-
-        anchors.centerIn: parent
         text: "MENU"
-        color: hover.hovered || popup.open || networkPopup.open ? Theme.inverseText : Theme.text
+        color: root.hot ? Theme.inverseText : Theme.text
         font.pixelSize: Theme.fontExtraSmall + 2
     }
 
+    // A centred overlay taking over the screen closes this menu, instead of
+    // leaving two panels open at once.
     Connections {
         target: ShellState
 
@@ -78,13 +66,12 @@ Rectangle {
         screenEdge: "left"
         title: "SYSTEM"
         contentWidth: Theme.popupWidth
-        contentHeight: 6 * Theme.popupRowHeight + 5 * Theme.popupRowSpacing + Theme.popupChromeHeight
         open: false
 
         content: Component {
             Column {
-                anchors.fill: parent
-                spacing: 4
+                width: parent.width
+                spacing: Theme.popupRowSpacing
 
                 MenuAction {
                     width: parent.width

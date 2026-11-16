@@ -25,7 +25,7 @@ PanelWindow {
     color: "transparent"
     implicitWidth: 400
     implicitHeight: stack.implicitHeight
-    visible: stack.implicitHeight > 0 && (!Notifs.dnd || Notifs.criticalActive)
+    visible: Notifs.server.trackedNotifications.values.length > 0 && (!Notifs.dnd || Notifs.criticalActive)
     focusable: false
 
     WlrLayershell.layer: WlrLayer.Overlay
@@ -61,7 +61,7 @@ PanelWindow {
         readonly property bool hasImage: (notif.image ?? "").length > 0
 
         width: parent.width
-        height: contentCol.implicitHeight + 33
+        height: contentCol.implicitHeight + 39
         borderColor: critical && Theme.blink ? Theme.textHigh : Theme.borderHigh
 
         Timer {
@@ -121,8 +121,8 @@ PanelWindow {
 
                         required property var modelData
 
-                        width: actionText.implicitWidth + 16
-                        height: 22
+                        width: actionText.implicitWidth + 18
+                        height: 26
                         color: actionMouse.hovered ? Theme.highlight : Theme.surfaceHigh
                         border.width: 1
                         border.color: Theme.borderHigh
@@ -141,7 +141,7 @@ PanelWindow {
                             anchors.centerIn: parent
                             text: actionBtn.modelData.text.toUpperCase()
                             color: actionMouse.hovered ? Theme.inverseText : Theme.text
-                            font.pixelSize: Theme.fontExtraSmall + 2
+                            font.pixelSize: Theme.fontSmall
                         }
                     }
                 }

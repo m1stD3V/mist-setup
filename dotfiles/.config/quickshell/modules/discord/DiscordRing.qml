@@ -79,7 +79,7 @@ PanelWindow {
                             return (g.length > 0 ? g + " / " : "") + n;
                         }
                         color: Theme.textDim
-                        font.pixelSize: Theme.fontExtraSmall + 2
+                        font.pixelSize: Theme.fontSmall
                         elide: Text.ElideRight
                         maximumLineCount: 1
                     }
@@ -88,7 +88,7 @@ PanelWindow {
                         width: parent.width
                         text: "IS CALLING YOU"
                         color: Theme.blink ? Theme.textHigh : Theme.textMuted
-                        font.pixelSize: Theme.fontExtraSmall + 2
+                        font.pixelSize: Theme.fontSmall
                     }
                 }
             }
