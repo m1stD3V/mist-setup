@@ -230,8 +230,8 @@ The deployed config avoids machine-specific values:
    p10k configure
    ```
 5. Open Neovim once to finish any remaining LSP/tool installs.
-6. Start Firefox once; its generated chrome styles apply at startup. OpenChamber
-   picks up the generated theme on its next start.
+6. Start Firefox once; the generated textfox `chrome/config.css` applies at
+   startup. OpenChamber picks up the generated theme on its next start.
 
 ## Notes
 
@@ -240,11 +240,14 @@ The deployed config avoids machine-specific values:
   scripts whenever the wallpaper changes, and `install.sh` runs the same ones
   after deploying dotfiles:
   - `~/.config/ghostty/sync-theme.py` writes the Ghostty palette
-  - `~/.config/quickshell/scripts/sync-firefox-theme.py` writes
-    `userChrome.css`, `userContent.css` and a managed block in `user.js` of the
-    default Firefox profile (visible on the next Firefox start)
+  - `~/.config/quickshell/scripts/sync-firefox-theme.py` writes the textfox
+    `chrome/config.css` and a managed block in `user.js` of the default Firefox
+    profile (visible on the next Firefox start)
   - `~/.config/quickshell/scripts/sync-openchamber-theme.py` writes
     `~/.config/openchamber/themes/openchamber-dark.json` (reloaded live)
+- Firefox theming assumes [textfox](https://github.com/adriankarlen/textfox) is
+  installed in the default profile; the generated `chrome/config.css` only
+  supplies its palette and options.
 - The shell palette carries a fixed highlight (`#f72585`) for hover, selection
   and active states; everything else follows the wallpaper.
 - The overflow menu's **Network** entry lists Wi-Fi networks and wired devices

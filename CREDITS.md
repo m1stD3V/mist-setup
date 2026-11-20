@@ -84,11 +84,26 @@ GPL-3.0. That checkout is not part of this repository.
 unit templates in `discord-bridge/systemd/` are part of this repository and stay
 MIT-licensed; they only build and run the patched client.
 
+## Firefox theme: textfox
+
+- Project: textfox — <https://github.com/adriankarlen/textfox>
+- Author: adriankarlen
+- License: Mozilla Public License 2.0 — see
+  [`LICENSES/MPL-2.0-textfox.txt`](LICENSES/MPL-2.0-textfox.txt)
+
+`sync-firefox-theme.py` writes the `chrome/config.css` that configures a
+textfox installation with the mist palette. textfox's own `chrome/` files are
+not bundled here; install textfox from the upstream project. The generated file
+sets textfox's `--tf-*` options and is written only into the user's Firefox
+profile.
+
 ## Generated themes
 
 `dotfiles/.config/quickshell/scripts/sync-firefox-theme.py` and
 `dotfiles/.config/quickshell/scripts/sync-openchamber-theme.py` generate theme
-files for Firefox and OpenChamber from the current wallpaper. They write only to
+files for Firefox and OpenChamber from the current wallpaper. The Firefox
+script writes textfox's `chrome/config.css` and a managed block in `user.js`;
+the OpenChamber script writes `~/.config/openchamber/themes`. They write only to
 the user's own Firefox profile and `~/.config/openchamber/themes`; neither
 project's files are copied into this repository.
 
