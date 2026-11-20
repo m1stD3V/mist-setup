@@ -32,7 +32,15 @@ return {
         "yaml",
       }
 
-      require("nvim-treesitter").install(parsers)
+      if vim.fn.executable("tree-sitter") == 1 then
+        require("nvim-treesitter").install(parsers)
+      else
+        vim.notify(
+          "tree-sitter CLI not found; Treesitter parsers will not be installed.\n"
+            .. "Install it with: sudo pacman -S tree-sitter-cli",
+          vim.log.levels.WARN
+        )
+      end
 
       vim.treesitter.language.register("bash", "zsh")
 

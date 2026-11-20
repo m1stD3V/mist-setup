@@ -1023,6 +1023,9 @@ bootstrap_nvim() {
     warn "Neovim is not installed; skipping bootstrap"
     return 0
   }
+  command -v tree-sitter >/dev/null || {
+    warn "tree-sitter CLI is missing; Neovim cannot build Treesitter parsers"
+  }
   log "Bootstrapping Neovim plugins"
   if ((DRY_RUN)); then
     log "[dry-run] nvim --headless '+Lazy! sync' +qa"
