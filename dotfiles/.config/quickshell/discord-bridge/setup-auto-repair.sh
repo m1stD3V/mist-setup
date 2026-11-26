@@ -21,11 +21,16 @@ for unit in quickshell-discord-bridge.service quickshell-discord-bridge.path; do
         "$BRIDGE_DIR/systemd/$unit.in" >"$UNIT_DIR/$unit"
 done
 
-if ! systemctl --user daemon-reload; then
-    echo "systemd --user is not available; units were written to $UNIT_DIR" >&2
-    exit 1
+# Enable it even when no user manager is running (for example during an
+# unattended install from a TTY): the symlink is picked up at the next login.
+mkdir -p "$UNIT_DIR/default.target.wants"
+ln -sf "../$UNIT_PATH" "$UNIT_DIR/default.target.wants/$UNIT_PATH"
+
+if ! systemctl --user daemon-reload 2>/dev/null; then
+    echo "systemd --user is not available; $UNIT_PATH starts at the next login" >&2
+    exit 0
 fi
-systemctl --user enable --now "$UNIT_PATH"
+systemctl --user start "$UNIT_PATH" 2>/dev/null || true
 
 echo "Discord update auto-repair is enabled ($UNIT_PATH)."
 echo "Check it with: systemctl --user status $UNIT_PATH"

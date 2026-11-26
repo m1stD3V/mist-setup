@@ -93,8 +93,9 @@ MIT-licensed; they only build and run the patched client.
 
 `sync-firefox-theme.py` writes the `chrome/config.css` that configures a
 textfox installation with the mist palette. textfox's own `chrome/` files are
-not bundled here; install textfox from the upstream project. The generated file
-sets textfox's `--tf-*` options and is written only into the user's Firefox
+not bundled here; `install.sh` clones them from the upstream project into
+`~/.local/share/textfox` and copies the chrome into the user's Firefox profile.
+The generated file sets textfox's `--tf-*` options and is written only into that
 profile.
 
 ## Generated themes

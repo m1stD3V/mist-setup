@@ -21,12 +21,16 @@ DEFAULT_WALL = os.path.join(HOME, ".config/wallpaper/THINK.png")
 HIGHLIGHT = "#f72585"  # Theme.highlight, fixed in the shell
 
 PREFS = [
-    ("toolkit.legacyUserProfileCustomizations.stylesheets", "true"),
-    ("ui.systemUsesDarkTheme", "1"),
-    ("browser.theme.toolbar-theme", "0"),
-    ("browser.theme.content-theme", "0"),
-    ("layout.css.prefers-color-scheme.content-override", "0"),
-    ("widget.non-native-theme.enabled", "true"),
+    ("toolkit.legacyUserProfileCustomizations.stylesheets", True),
+    ("ui.systemUsesDarkTheme", 1),
+    ("browser.theme.toolbar-theme", 0),
+    ("browser.theme.content-theme", 0),
+    ("layout.css.prefers-color-scheme.content-override", 0),
+    ("widget.non-native-theme.enabled", True),
+    # textfox needs these; Nova is not supported by its chrome yet.
+    ("svg.context-properties.content.enabled", True),
+    ("layout.css.has-selector.enabled", True),
+    ("browser.nova.enabled", False),
 ]
 
 BEGIN = "// >>> mist theme (generated, do not edit) >>>"
@@ -605,11 +609,17 @@ def textfox_config_css(c):
     )
 
 
+def pref_value(val):
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    return str(val)
+
+
 def prefs_js():
     out = [BEGIN, "// Dark scheme and the legacy stylesheet switch. user.js is applied"]
     out.append("// at every startup, so these override changes made in about:preferences.")
     for k, val in PREFS:
-        out.append(f'user_pref("{k}", {val});')
+        out.append(f'user_pref("{k}", {pref_value(val)});')
     out.append(END)
     return "\n".join(out) + "\n"
 

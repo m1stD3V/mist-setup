@@ -31,6 +31,8 @@ pacman-contrib
 reflector
 pciutils
 usbutils
+file
 fontconfig
 ffmpeg
+poppler
 zsh

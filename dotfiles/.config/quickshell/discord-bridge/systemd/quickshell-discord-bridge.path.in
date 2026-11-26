@@ -3,6 +3,9 @@ Description=Watch the Discord install directory for version updates
 
 [Path]
 PathModified=%h/.config/discord
+# The Arch discord package only downloads the app on first launch. This makes
+# the first app-* directory trigger the patch without a manual rerun.
+PathExistsGlob=%h/.config/discord/app-*
 Unit=quickshell-discord-bridge.service
 
 [Install]

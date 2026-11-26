@@ -16,8 +16,14 @@ Arch Linux installation with a bootloader and can log in.
 - eza with Nerd Font file icons (`ls`, `l`, `ll`, `la`, `lt`, `tree`)
 - The icons-in-terminal glyph font plus its fontconfig fallback rule
 - Neovim with Lazy.nvim plugins, LSP servers, formatters, and Treesitter
-- AMD/Intel graphics drivers, CPU microcode, zram configuration
-- Optional apps and AUR packages with `--full`
+- AMD/Intel graphics drivers (NVIDIA open driver when detected), CPU microcode,
+  zram configuration
+- OpenCode CLI, the textfox Firefox chrome, and the DiscordBridge plugin by
+  default; optional apps and AUR packages with `--full`
+
+A plain run is unattended: it installs every package the desktop needs, enables
+the services, generates the themes and deploys the dotfiles without asking a
+question. `--interactive` restores the confirmation prompts.
 
 ## Dependencies
 
@@ -53,16 +59,37 @@ chmod +x install.sh
 ./install.sh
 ```
 
+A plain run does not stop for input. It installs the core, desktop and dev
+package groups, the NVIDIA driver when NVIDIA is detected, OpenCode, Firefox
+with textfox, Discord and the DiscordBridge plugin, then deploys the dotfiles.
+One sudo password prompt at the start is the only interaction; the installer
+keeps that sudo session alive for the rest of the run.
+
 Common options:
 
 ```sh
 ./install.sh --dry-run          # show what would happen
-./install.sh --yes              # accept defaults
-./install.sh --full             # include optional apps, AUR, OpenCode
-./install.sh --discord-bridge   # patch Discord with the bar's bridge plugin
+./install.sh --interactive      # ask before installing/updating (old behavior)
+./install.sh --full             # also install optional apps and AUR packages
+./install.sh --no-apps          # skip the optional applications group
+./install.sh --no-aur           # skip AUR packages
+./install.sh --no-opencode      # skip the OpenCode CLI
+./install.sh --no-nvidia        # do not install the NVIDIA driver
+./install.sh --no-textfox       # skip the Firefox chrome theme
+./install.sh --no-discord-bridge  # skip the client mod
 ./install.sh --no-nvim          # skip Neovim plugin bootstrap
 ./install.sh --no-dotfiles      # packages only
 ```
+
+The installer also handles its own prerequisites: it installs `git` and `curl`
+when missing, waits for the network, and refreshes the pacman keyring if the
+first system update fails on signatures. A run started as root works too
+(`sudo ./install.sh` keeps targeting the invoking account).
+
+The output follows the desktop theme: a pink and violet block wordmark, numbered
+sections and bracketed status tags (`[ ok ]`, `[warn]`, `[fail]`). It falls back
+to plain text when the output is piped, or when `NO_COLOR=1` / `MIST_PLAIN=1` is
+set, so logs from `--check` stay readable.
 
 ## Updating an existing install
 
@@ -82,9 +109,11 @@ It works in three steps:
    fast-forwards the checkout. A dirty tree or a diverged branch is left alone
    with a warning. If `install.sh` itself changed, the update restarts with the
    new script.
-2. **Packages** — compares `packages/*.txt` with `pacman -T` and offers to
-   install anything added upstream. Pass `--no-packages` to leave packages
-   alone, or `--full` / `--apps` / `--aur` to include the optional groups.
+2. **Packages** — upgrades the system, then compares `packages/*.txt` with
+   `pacman -T` and installs anything added upstream. Pass `--no-packages` to
+   leave packages alone, or `--full` / `--apps` / `--aur` to include the
+   optional groups. Like a fresh install, `--update` runs without prompting;
+   pass `--interactive` to review each step.
 3. **Dotfiles** — compares each bundled file with the deployed copy and the
    hash recorded in `~/.local/state/mist/deployed.tsv`:
    - new files are added
@@ -151,6 +180,7 @@ dotfiles/                  User configuration (bundled assets credited in CREDIT
 system/                    System-level configuration (zram)
 scripts/nvim-mason.lua     Neovim LSP/tool bootstrap
 scripts/check-quickshell.sh  QML syntax check for the bundled Quickshell config
+scripts/firefox-profile.py   Finds (or creates) the default Firefox profile
 ```
 
 `scripts/check-quickshell.sh [path] [--run]` parses every `.qml` file with the
@@ -230,8 +260,10 @@ The deployed config avoids machine-specific values:
    p10k configure
    ```
 5. Open Neovim once to finish any remaining LSP/tool installs.
-6. Start Firefox once; the generated textfox `chrome/config.css` applies at
-   startup. OpenChamber picks up the generated theme on its next start.
+6. Start Firefox once; textfox is already installed, so the generated
+   `chrome/config.css` applies at startup. Start Discord once; the bridge is
+   patched automatically in the background. OpenChamber picks up the generated
+   theme on its next start.
 
 ## Notes
 
@@ -245,9 +277,11 @@ The deployed config avoids machine-specific values:
     profile (visible on the next Firefox start)
   - `~/.config/quickshell/scripts/sync-openchamber-theme.py` writes
     `~/.config/openchamber/themes/openchamber-dark.json` (reloaded live)
-- Firefox theming assumes [textfox](https://github.com/adriankarlen/textfox) is
-  installed in the default profile; the generated `chrome/config.css` only
-  supplies its palette and options.
+- [textfox](https://github.com/adriankarlen/textfox) is cloned into
+  `~/.local/share/textfox` and its chrome is copied into the default Firefox
+  profile (a profile is created when Firefox has never run). The generated
+  `chrome/config.css` supplies the palette and options. Use `--no-textfox` to
+  skip it.
 - The shell palette carries a fixed highlight (`#f72585`) for hover, selection
   and active states; everything else follows the wallpaper.
 - The overflow menu's **Network** entry lists Wi-Fi networks and wired devices
@@ -259,19 +293,28 @@ The deployed config avoids machine-specific values:
   state is shown next to it. `--full` installs optional apps from
   `packages/apps.txt` and AUR packages from `packages/aur.txt`, then enables
   the cups printing stack and firewalld.
-- OpenCode is installed only with `--full` or `--opencode`.
+- OpenCode is installed by default; use `--no-opencode` to skip it.
 - yay and pacseek are installed on every run; `--aur` only controls the optional
   AUR applications listed in `packages/aur.txt`.
+- Firefox and Discord are installed even without `--apps` because the textfox
+  theme and the DiscordBridge plugin are enabled by default. Their entries in
+  `packages/apps.txt` remain part of the optional group.
 
-### Discord bridge (optional, client mod)
+### Discord bridge (client mod)
 
 The Discord bar widget shows voice-call state through a small plugin that is
 injected into the Discord desktop app. That is a client mod and may conflict
-with Discord's Terms of Service; install it deliberately:
+with Discord's Terms of Service. It is installed by default; skip it with:
 
 ```sh
-./install.sh --discord-bridge
+./install.sh --no-discord-bridge
 ```
+
+The Arch `discord` package only downloads the real app on first launch, so the
+installer arms the `quickshell-discord-bridge.path` unit (`PathExistsGlob` on
+`~/.config/discord/app-*`) and patches the app automatically when Discord first
+starts. If Discord is already installed, the bridge is built and injected
+immediately.
 
 `dotfiles/.config/quickshell/discord-bridge/install.sh` clones and builds
 Equicord, copies `plugin/` into it and injects the result into
