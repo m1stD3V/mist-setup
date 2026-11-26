@@ -1,0 +1,23 @@
+diff --git a/chrome/sidebar.css b/chrome/sidebar.css
+index a788ef3..8a6f151 100644
+--- a/chrome/sidebar.css
++++ b/chrome/sidebar.css
+@@ -61,7 +61,7 @@
+     border-color: var(--tf-accent) !important;
+   }
+   &::before {
+-    display: var(--tf-display-titles);
++    display: var(--tf-tools-label, var(--tf-display-titles));
+     position: absolute;
+     content: "tools";
+     color: var(--lwt-text-color);
+@@ -87,3 +87,9 @@
+     background-color: var(--lwt-accent-color) !important;
+     background-image: var(--lwt-accent-color) !important;
+ }
++
++/* the collapsed rail has no room for the "tools" label; the custom property
++   inherits from the light-DOM host into the sidebar's shadow tree */
++sidebar-main:not([expanded]) {
++  --tf-tools-label: none;
++}
